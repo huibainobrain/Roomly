@@ -134,7 +134,7 @@ document.addEventListener('click', e => {
       text:`希望${guest}本周额外留宿 1 晚`, nights:S.nights[ME], replies:{} });
     logFeed(ME, `登记了访客：${when}${on ? ' · 留宿' : ''}`);
     closeSheet(); render();
-    toast(over ? '本次超过当前约定，已向室友发出征询' : on ? '已登记，符合当前约定' : '已登记，室友会看到今晚有访客');
+    toast(over ? '这次登记超过现在的约定，已向室友发出征询' : on ? '已登记，符合现在的约定' : '已登记，室友会看到今晚有访客');
     break;
   }
   case 'visitOk': {
@@ -371,22 +371,6 @@ document.addEventListener('click', e => {
     it.done = !it.done; render();
     break;
   }
-  case 'finishMove': {
-    const mo = S.moveout;
-    S.movedOut.push(mo.who);
-    const inc = incomingMember();
-    if (inc) {
-      delete inc.incoming;
-      S.spaces.forEach(sp => sp.zones.forEach(z => { if (z.to) { z.o = z.to; delete z.to; } }));
-      S.tasks.forEach(t => { if (t.who === mo.who) t.who = inc.id; });
-      S.load[inc.id] = 0;
-    }
-    S.away = S.away.filter(a => a.who !== mo.who);
-    logFeed('sys', `${mem(mo.who).name} 已完成搬出交接${inc ? `，${inc.name} 接管了 ${mo.who === 'tom' ? '03室' : ''}与相关分区` : ''}`);
-    goTo('me'); toast(`${mem(mo.who).name} 已顺利离开 503。这个家会继续。`);
-    break;
-  }
-
   /* ---- 管家 ---- */
   case 'butlerGo': {
     const inp = document.getElementById('butlerIn');
@@ -460,12 +444,13 @@ function finishTopic(t) {
   logFeed('sys', `「${t.title}」已获全员确认，成为共同约定`);
 }
 
+/* 搬出是流程预览，主角是当前用户，不涉及任何其他成员 */
 function defaultMoveout() {
-  return { who:'tom', date:'10月31日', items:[
-    { id:'m1', t:'结清未完成账单', m:'待结算 2 笔', done:false },
-    { id:'m2', t:'带走私人物品',   m:'03室 · 冰箱下层 · 鞋柜 C 区', done:false },
+  return { who:ME, items:[
+    { id:'m1', t:'结清未完成账单', m:'当前待结算 2 笔', done:false },
+    { id:'m2', t:'带走私人物品',   m:'02室 · 冰箱上层 · 鞋柜 A 区', done:false },
     { id:'m3', t:'公共资产权益结算', m:'共同购买的电水壶、晾衣架', done:false },
-    { id:'m4', t:'清空并清洁分区', m:'移交给 Lin 前恢复原状', done:false },
+    { id:'m4', t:'清空并清洁分区', m:'交还前恢复原状', done:false },
     { id:'m5', t:'归还钥匙与门禁卡', m:'交回相寓管家', done:false },
     { id:'m6', t:'退出值日轮换',   m:'剩余任务重新分配', done:false }
   ] };

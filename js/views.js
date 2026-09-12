@@ -265,16 +265,16 @@ function vSupply() {
 function vSpace() {
   const inc = incomingMember();
   const zoneRow = z => {
-    const cls = z.o === 'public' ? 'pub' : z.to ? 'handover' : z.o === ME ? 'mine' : '';
+    const cls = z.o === 'public' ? 'pub' : z.pending ? 'pending' : z.o === ME ? 'mine' : '';
     return `<div class="zone ${cls}">
       <span class="zn">${z.n}</span>
       <span class="zo">${z.o === 'public'
         ? '<span class="pill plain">公共</span>'
         : `${av(z.o, 'sm')}${mem(z.o).name}${z.o === ME ? '（你）' : ''}`}
-        ${z.to ? `<span style="color:var(--ink-4)">${svg(I.arrow)}</span>${av(z.to, 'sm')}` : ''}</span>
+        ${z.pending ? `<span class="pill plain">${mem(z.o).joined}起</span>` : ''}</span>
     </div>`;
   };
-  const handing = S.spaces.some(sp => sp.zones.some(z => z.to));
+  const pendingZone = S.spaces.some(sp => sp.zones.some(z => z.pending));
   return `
     ${backBtn('生活', 'life')}
     ${head('公共空间', '把物理边界写下来，是陌生人住在一起最省事的一件事。谁用哪一格，不需要每次开口问。')}
@@ -283,8 +283,8 @@ function vSpace() {
         <h3>${svg(I[sp.icon])}${sp.name}</h3>
         <div class="zones">${sp.zones.map(zoneRow).join('')}</div>
       </div>`).join('')}</div>
-    ${handing && inc ? `<div class="handnote" style="margin-top:14px">
-      Tom 搬出后，标记了箭头的分区将在 ${inc.joined} 移交给 ${inc.name}。移交会在搬出清单里逐项确认，不需要现在处理。</div>` : ''}`;
+    ${pendingZone && inc ? `<div class="handnote" style="margin-top:14px">
+      ${inc.name} 入住 ${inc.room} 后使用上面新增的分区，${inc.joined}起生效。现有三位成员的分区都不变。</div>` : ''}`;
 }
 
 /* ---------- 访客 ---------- */
@@ -292,17 +292,17 @@ function vGuest() {
   const rule = S.rules.find(r => r.id === 'r2');
   return `
     ${backBtn('生活', 'life')}
-    ${head('访客', '普通到访只要说一声；留宿会对照 现在的约定，超过了也不是禁止，而是先问问大家。')}
+    ${head('访客', '普通到访只要说一声；留宿会对照现在的约定，超过了也不是禁止，而是先问问大家。')}
     ${S.visitAsks.length ? `${sec('等待你回应')}
       <div class="stack">${S.visitAsks.map(a => `
         <div class="card pad">
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">${av(a.host, 'lg')}
             <span><b style="font-family:var(--f-d);font-size:15px">${mem(a.host).name} ${a.text}</b>
-            <div style="font-size:12.5px;color:var(--ink-3);margin-top:1px">本周第 ${a.nights} 晚，现在的约定是每周最多 2 晚</div></span></div>
+            <div style="font-size:12.5px;color:var(--ink-3);margin-top:1px">按登记记录这会是本周第 ${a.nights} 晚，现在的约定是每周最多 ${overnightRule().limit} 晚</div></span></div>
           <div class="btnrow"><button class="btn pri sm" data-act="visitOk" data-id="${a.id}">同意</button>
             <button class="btn sm" data-act="visitTalk" data-id="${a.id}">想讨论一下</button></div>
         </div>`).join('')}</div>` : ''}
-    ${sec('最近的访客登记')}
+    ${sec('最近的访客登记', '本周此前已有 3 晚留宿登记，今晚是普通到访、不留宿')}
     <div class="card rows">${S.visits.length ? S.visits.map(v => `
       <div class="row"><div class="main">
         <div class="ttl">${mem(v.host).name} 的${v.guest}
@@ -316,7 +316,7 @@ function vGuest() {
       <div class="ruleitem" style="padding:0;border:0">
         <span class="rn">${svg(I.guest)}</span>
         <div class="rb"><div class="rt">${rule.title}</div><div class="rd">${rule.desc}</div>
-        <div class="rd">本周你已登记 ${S.nights[ME]} 晚。</div></div>
+        <div class="rd">按当前登记记录，本周你登记了 ${S.nights[ME]} 晚留宿。系统只统计登记，不会去核实实际情况。</div></div>
       </div>
     </div>
     <div class="btnrow" style="margin-top:14px">
@@ -582,7 +582,7 @@ function vLin() {
     <div class="card pad" style="margin-bottom:14px">
       <div style="display:flex;gap:12px;align-items:center">${av(inc.id, 'xl')}
         <div><div style="font-family:var(--f-d);font-weight:600;font-size:17px">${inc.name}</div>
-          <div style="font-size:13px;color:var(--ink-2)">${inc.joined} 入住 ${inc.room} · 接手 Tom 原有的分区</div></div></div>
+          <div style="font-size:13px;color:var(--ink-2)">${inc.joined} 入住 ${inc.room} · 这个家将从 ${living().length} 位成员变成 ${living().length + 1} 位</div></div></div>
       <div class="vals" style="margin-top:12px">
         ${['sleep','cook','pet','smoke','social'].map(k => `<span class="val" style="padding-left:10px">${PREF_KEYS.find(p => p.k === k).label} <b>${inc.prefs[k]}</b></span>`).join('')}
       </div>
@@ -600,7 +600,7 @@ function vLin() {
         <div class="diffrow">
           <div class="dt">${t.label}${t.rule ? '<span class="pill warn">涉及现有约定</span>' : '<span class="pill plain">暂无相关约定</span>'}</div>
           <div class="vals">
-            <span class="val" style="padding-left:10px">现在家里 <b>${t.house}</b></span>
+            <span class="val" style="padding-left:10px">现在家里<b>${t.house}</b></span>
             <span class="val">${av(inc.id, 'sm')}${inc.name} <b>${t.lin}</b></span>
           </div>
           ${t.rule ? `<div class="rd" style="margin-top:7px;font-size:12.5px;color:var(--ink-3)">现有约定：${t.rule.title}</div>` : ''}
@@ -629,13 +629,13 @@ const LADDER = [
 function vIssue() {
   return `
     ${backBtn('共识', 'talk')}
-    ${head('居住问题记录', '这里记录的是规则和现状之间的偏差，不是谁做错了什么。没有违规次数，也没有排名。')}
+    ${head('居住问题记录', '这里记录的是约定和登记情况之间的差距，不是谁做错了什么。没有违规次数，也没有排名。')}
     ${S.issues.map(it => {
       const rule = S.rules.find(r => r.id === it.rule);
       return `<div class="card pad" style="margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
           <div><h3 style="font-size:16px">${it.title}</h3>
-            <div style="font-size:13px;color:var(--ink-2);margin-top:3px">${it.window}，出现 ${it.count} 次提醒</div></div>
+            <div style="font-size:13px;color:var(--ink-2);margin-top:3px">${it.window}，系统发出过 ${it.count} 次提醒</div></div>
           <span class="pill plain">${it.cat}</span></div>
         <div class="notice" style="margin-top:11px">${svg(I.info)}<span>${it.note}</span></div>
         ${rule ? `<div style="font-size:12.5px;color:var(--ink-3);margin-top:10px">对应约定：${rule.title} —— ${rule.desc}</div>` : ''}
@@ -732,7 +732,7 @@ function vMe() {
     ${sec('离开这个家')}
     <div class="card pad">
       <p style="font-size:13.5px;color:var(--ink-2)">搬出会生成一份清单：待结账单、私人物品、公共资产权益、空间清理、钥匙归还、值日退出。
-        全部完成后你就正式离开，而这个家 会继续运行下去。</p>
+        全部完成后你就正式离开，而这个家会继续运行下去。</p>
       <div class="btnrow" style="margin-top:12px">
         <button class="btn" data-act="go" data-tab="me" data-sub="moveout">查看搬出流程</button>
       </div>
@@ -744,27 +744,28 @@ function vMoveout() {
   const mo = S.moveout || defaultMoveout();
   const done = mo.items.filter(i => i.done).length;
   const all = done === mo.items.length;
-  const inc = incomingMember();
 
   return `
     ${backBtn('我的', 'me')}
-    ${head('搬出流程', '有人离开，有人搬进来，这个家不会被删除。规则、公共资产和空间会继续留在这个家里。')}
+    ${head('搬出流程', '有人离开，也会有人搬进来，这个家不会被删除。共同约定、公共资产和空间分区都会留下来。')}
+    <div class="notice" style="margin-bottom:12px">${svg(I.info)}<span>
+      这是流程预览，你现在并没有在搬出。点击任意一项可以切换状态，看看整个交接是怎么走完的。</span></div>
     <div class="card pad" style="margin-bottom:12px">
-      <div style="display:flex;gap:11px;align-items:center">${av(mo.who, 'lg')}
-        <div style="flex:1"><div style="font-family:var(--f-d);font-weight:600;font-size:15.5px">${mem(mo.who).name} 计划 ${mo.date} 搬出</div>
+      <div style="display:flex;gap:11px;align-items:center">${av(ME, 'lg')}
+        <div style="flex:1"><div style="font-family:var(--f-d);font-weight:600;font-size:15.5px">如果你要搬出，需要完成这些</div>
           <div style="font-size:13px;color:var(--ink-2);margin-top:1px">清单完成 ${done}/${mo.items.length}</div></div>
-        ${all ? '<span class="pill ok">已完成</span>' : `<span class="pill warn">进行中</span>`}</div>
+        ${all ? '<span class="pill ok">已走完</span>' : '<span class="pill plain">预览中</span>'}</div>
     </div>
     <div class="card rows" style="margin-bottom:12px">
       ${mo.items.map(i => `<div class="chk ${i.done ? 'on' : ''}" data-act="moveChk" data-id="${i.id}" role="button" tabindex="0">
         <span class="box">${svg(I.check, 2.6)}</span><span class="ct">${i.t}</span><span class="cm">${i.m}</span></div>`).join('')}
     </div>
     ${all ? `<div class="card pad" style="border-color:var(--jade-line)">
-      <b style="font-family:var(--f-d);font-size:15px">${mem(mo.who).name} 已顺利离开 503</b>
-      <p style="font-size:13.5px;color:var(--ink-2);margin-top:5px">这个家会继续。${inc ? `${inc.name} 随后接管 ${mem(mo.who).room}、冰箱下层、储物柜 C 格、卫生间 C 层和鞋柜 C 区。` : ''}
-        历史账单和规则都会保留下来。</p>
-      <div class="btnrow" style="margin-top:11px"><button class="btn pri sm" data-act="finishMove">确认交接完成</button></div>
-    </div>` : `<div class="notice">${svg(I.info)}<span>清单逐项完成后，交接才会生效。可以点击任意一项切换状态来预览这个流程。</span></div>`}`;
+      <b style="font-family:var(--f-d);font-size:15px">六项走完后，你就正式离开 503</b>
+      <p style="font-size:13.5px;color:var(--ink-2);margin-top:5px">
+        你的房间和分区会空出来等下一位成员，其余成员的分区不受影响。
+        历史账单、共同约定和公共资产都会留在这个家里，剩下的人照常生活。</p>
+    </div>` : ''}`;
 }
 
 const VIEWS = { home:vHome, life:vLife, bill:vBill, talk:vTalk, me:vMe };

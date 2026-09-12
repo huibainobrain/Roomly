@@ -46,7 +46,7 @@ const MEMBERS = [
     prefs:{ quiet:'23:30', visitor:'提前说一声', overnight:'每周 ≤1 晚', kitchen:'台面擦净，锅具当天洗',
             supply:'统一采购 AA', temp:'26°C', smoke:'家里都不吸',
             sleep:'23:00 左右', social:'礼貌互不打扰', conflict:'系统先中立提醒', cook:'几乎不做饭', pet:'不养，可以接受' } },
-  { id:'lin', name:'Lin', short:'LN', c:'#6B4A6E', room:'03室', incoming:true, joined:'9月20日',
+  { id:'lin', name:'Lin', short:'LN', c:'#6B4A6E', room:'04室', incoming:true, joined:'9月20日',
     prefs:{ quiet:'23:30', visitor:'提前说一声', overnight:'不限', kitchen:'台面擦净，锅具当天洗',
             supply:'统一采购 AA', temp:'27°C', smoke:'家里都不吸',
             sleep:'00:30 左右', social:'礼貌互不打扰', conflict:'系统先中立提醒', cook:'偶尔做饭', pet:'不养，可以接受' } }
@@ -153,24 +153,32 @@ const SEED = {
     { id:'s10',kind:'private', name:'私人物品',       owner:'tom',    zone:'03室 与 鞋柜 C 区' }
   ],
 
+  /* 四位成员各有自己的分区。Lin 是新增的第四位，不接手任何人正在用的空间，
+     她的分区标记为 pending，9月20日入住后才生效。 */
   spaces: [
     { id:'sp1', name:'冰箱', icon:'fridge',
-      zones:[{n:'上层',o:'yiming'},{n:'中层',o:'alex'},{n:'下层',o:'tom',to:'lin'},{n:'门侧',o:'public'}] },
+      zones:[{n:'上层',o:'yiming'},{n:'中层',o:'alex'},{n:'下层',o:'tom'},
+             {n:'保鲜抽屉',o:'lin',pending:true},{n:'门侧',o:'public'}] },
     { id:'sp2', name:'厨房储物柜', icon:'cabinet',
-      zones:[{n:'A 格',o:'yiming'},{n:'B 格',o:'alex'},{n:'C 格',o:'tom',to:'lin'},{n:'D 格',o:'public'}] },
+      zones:[{n:'A 格',o:'yiming'},{n:'B 格',o:'alex'},{n:'C 格',o:'tom'},
+             {n:'D 格',o:'lin',pending:true},{n:'E 格',o:'public'}] },
     { id:'sp3', name:'卫生间置物架', icon:'shelf',
-      zones:[{n:'A 层',o:'yiming'},{n:'B 层',o:'alex'},{n:'C 层',o:'tom',to:'lin'}] },
+      zones:[{n:'A 层',o:'yiming'},{n:'B 层',o:'alex'},{n:'C 层',o:'tom'},
+             {n:'D 层',o:'lin',pending:true}] },
     { id:'sp4', name:'鞋柜', icon:'shoe',
-      zones:[{n:'A 区',o:'yiming'},{n:'B 区',o:'alex'},{n:'C 区',o:'tom',to:'lin'}] }
+      zones:[{n:'A 区',o:'yiming'},{n:'B 区',o:'alex'},{n:'C 区',o:'tom'},
+             {n:'D 区',o:'lin',pending:true}] }
   ],
 
+  /* 时间线：本周此前有 3 晚留宿登记，今晚是普通到访、不留宿。两者并存但不冲突。 */
   visits: [
-    { id:'v1', host:'alex', guest:'朋友', when:'今晚 19:00–22:00', overnight:false, status:'已告知' }
+    { id:'v1', host:'alex', guest:'朋友', when:'今晚 19:00–22:00', overnight:false, status:'已告知' },
+    { id:'v0', host:'alex', guest:'朋友', when:'9月9日 — 9月11日', overnight:true, nights:3, status:'已登记' }
   ],
-  /* 本周各成员同一访客已留宿的晚数 */
+  /* 本周同一访客的留宿登记晚数。系统只知道登记记录，不知道实际住了几晚。 */
   nights: { yiming:0, alex:3, tom:0 },
   visitAsks: [
-    { id:'va1', host:'alex', text:'希望朋友本周额外留宿 1 晚', nights:3, replies:{} }
+    { id:'va1', host:'alex', text:'希望朋友本周再留宿 1 晚', nights:4, replies:{} }
   ],
 
   laundry: { user:'alex', endsAt:'21:40', notifyMe:false, idleMinutes:0 },

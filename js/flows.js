@@ -248,18 +248,20 @@ function ruleFor(focus) {
   const key = FOCUS_RULE[focus];
   return key ? S.rules.find(r => r.prefKey === key) : null;
 }
-/* 现状与规则的差距。只描述事实，不指向任何人。 */
+/* 现状与约定的差距。
+   只依据系统里的登记记录和约定来判断，不写成"实际住了几晚"——
+   产品并不知道真实生活，只知道谁登记了什么。 */
 function gapFor(focus) {
   if (FOCUS_RULE[focus] === 'overnight') {
     const o = overnightRule();
     if (!o) return null;
     return { exceeded: o.exceeded, limit: o.limit, actual: o.actual,
       text: o.exceeded
-        ? `本周同一访客已登记留宿 ${o.actual} 晚，约定是每周最多 ${o.limit} 晚，已超出 ${o.actual - o.limit} 晚。`
-        : `本周同一访客已登记留宿 ${o.actual} 晚，仍在每周 ${o.limit} 晚的约定范围内。` };
+        ? `根据当前登记记录，这位访客本周已留宿 ${o.actual} 晚，超过了大家约定的每周 ${o.limit} 晚。`
+        : `根据当前登记记录，这位访客本周已留宿 ${o.actual} 晚，仍在约定的每周 ${o.limit} 晚之内。` };
   }
   const it = S.issues.find(i => S.rules.find(r => r.id === i.rule && r.prefKey === FOCUS_RULE[focus]));
-  if (it) return { exceeded: true, text: `${it.window}，这条约定出现了 ${it.count} 次提醒。` };
+  if (it) return { exceeded: true, text: `${it.window}，系统就这条约定发出过 ${it.count} 次提醒。` };
   return null;
 }
 const AWK_SUGGEST = {
@@ -316,7 +318,7 @@ function awkwardSheet() {
         `<div class="uline"><span class="ul">原话</span><span class="uv" style="font-weight:400;font-family:var(--f-b);text-align:right">${a.text}</span></div>`
       ])}
       ${shifted ? `<div class="notice" style="margin-bottom:14px">${svg(I.info)}<span>
-        你一开始选的是「${a.cat}」，但从你的描述看，这件事更接近「${readCat}」。管家以你写的内容为准，选错分类不影响后面的判断。</span></div>` : ''}
+        看起来这件事更接近${readCat}问题，我按你实际描述的情况继续。</span></div>` : ''}
       <div style="font-size:13px;color:var(--ink-2);margin-bottom:9px">这件事可能同时涉及：</div>
       <div class="vals" style="margin-bottom:16px">${focuses.map(f => `<span class="val" style="padding-left:10px">${f}</span>`).join('')}</div>
       <div style="font-size:13.5px;font-weight:600;margin-bottom:9px">你最希望先解决哪一个？</div>
@@ -361,7 +363,7 @@ function awkwardSheet() {
       <div style="font-size:13.5px;font-weight:600;margin-bottom:9px">你希望怎么处理</div>
       <div class="opts">
         ${existing && gap && gap.exceeded
-          ? opt('remind', '按现有约定提醒', '管家发一条不指向任何人的提醒，只说明约定和当前情况', true) +
+          ? opt('remind', '按现有约定提醒', '由管家私下发出，不点名、不公开，只说明约定和登记情况', true) +
             opt('clarify', '重新确认这条约定', '如果觉得每周 ' + (gap.limit || '') + ' 晚这个数字本身需要调整', false)
           : existing
             ? opt('clarify', '重新确认这条约定', '把标准写得更具体，减少理解上的差异', true)
@@ -383,8 +385,9 @@ function awkwardSheet() {
       : `想和你聊一下${a.focus}这件事。我们家里目前没有相关的约定，我想问问你的想法，看能不能定一个大家都舒服的方式。`;
 
     const impact = {
-      remind: ['管家发出一条中立提醒，说明约定内容和当前情况', '提醒不指向任何人，也不会显示是谁触发的',
-               '不新增规则——这件事已经有约定了', '这次提醒会记入居住问题记录的第 1 级'],
+      remind: ['由合租管家私下发出，不会公开，也不会显示是谁触发的',
+               '只说明约定内容和登记情况，不做评价',
+               '不新增约定——这件事已经有约定了', '这次提醒会记入居住问题记录的第 1 级'],
       clarify: [`「${existing ? existing.title : a.focus}」进入重新确认`, '可以把标准或数字改得更具体',
                 '不新增规则，只修改现有这一条', '需要全员确认后才会更新'],
       rule: ['「正在讨论」中新增一个议题', '其他人看到的是议题本身，不会看到是谁提的', '全员同意后成为共同约定'],
@@ -407,6 +410,8 @@ function awkwardSheet() {
             uline('署名', '不显示发起人')
           ].filter(Boolean))}
       ${a.way === 'rule' ? `<div class="suggest" style="margin-bottom:14px"><div class="sl">建议的约定</div><p>${sug}</p></div>` : ''}
+      ${a.way === 'remind' ? `<div class="suggest" style="margin-bottom:14px"><div class="sl">管家会这样说</div>
+        <p>本周登记的留宿次数已经超过大家之前约定的范围，需要一起确认一下后面的安排吗？</p></div>` : ''}
       ${impactBox(impact[a.way])}
       <div class="acts"><button class="btn" data-act="awkBack">上一步</button>
         <button class="btn pri" data-act="awkSubmit">${
@@ -520,9 +525,9 @@ function visitSheet(presetOvernight) {
       <div class="notice">${svg(I.info)}<span>普通到访只需要告知其他室友，不需要征求同意。</span></div>`
       : n <= 2 ? `
       <div class="notice" style="background:var(--jade-soft);color:var(--jade-ink)">${svg(I.check)}<span>
-        这是本周第 ${n} 晚，符合当前约定：${rule.title}。</span></div>`
-      : `<div class="fair"><div class="fh">${svg(I.info)}本次将超过 现在的约定</div>
-        <p>这是本周第 ${n} 晚，当前约定是每周最多 2 晚。这不会被禁止，但建议先征求其他室友的意见。</p></div>`;
+        按登记记录，这会是本周第 ${n} 晚，符合当前约定：${rule.title}。</span></div>`
+      : `<div class="fair"><div class="fh">${svg(I.info)}这次登记会超过现在的约定</div>
+        <p>按登记记录，这会是本周第 ${n} 晚，超过约定的每周 2 晚。这不会被禁止，但建议先征求其他室友的意见。</p></div>`;
   };
   upd();
   sheetEl().querySelectorAll('#vo button').forEach(b => b.addEventListener('click', () => {
