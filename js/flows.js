@@ -1,0 +1,516 @@
+/* ============================================================
+   流程层：管家理解、入住共识、不好开口、安全处理、各类登记
+   统一原则：先展示理解结果和影响，用户确认后才执行。
+   ============================================================ */
+
+const ov = () => document.getElementById('ov');
+const sheetEl = () => document.getElementById('sheet');
+function openSheet(html, wide) {
+  const s = sheetEl();
+  s.className = 'sheet' + (wide ? ' wide' : '');
+  s.innerHTML = html;
+  ov().hidden = false;
+  const f = s.querySelector('input,textarea,select,button.opt');
+  if (f) f.focus();
+}
+function closeSheet() { ov().hidden = true; sheetEl().innerHTML = ''; }
+
+const uline = (l, v) => `<div class="uline"><span class="ul">${l}</span><span class="uv">${v}</span></div>`;
+const understandBox = (title, lines) =>
+  `<div class="understand"><div class="uh">${title}</div><div class="ub">${lines.join('')}</div></div>`;
+const impactBox = (lines) =>
+  `<div class="impact"><div class="il">确认后会发生什么</div><ul>${lines.map(l => `<li>${svg(I.check)}<span>${l}</span></li>`).join('')}</ul></div>`;
+const acts = (confirmAct, confirmLabel, extra) =>
+  `<div class="acts">${extra || ''}<button class="btn" data-act="close">取消</button>
+   <button class="btn pri" data-act="${confirmAct}">${confirmLabel}</button></div>`;
+
+/* ============================================================
+   跟管家说一句 —— 自然表达 → 结构化理解 → 影响 → 确认
+   ============================================================ */
+const TODAY_DATE = new Date(2026, 8, 12);
+const CN_NUM = { '一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'日':7,'天':7 };
+const fmtDate = d => `${d.getMonth() + 1}月${d.getDate()}日`;
+
+function weekdayDate(cn, nextWeek) {
+  const target = CN_NUM[cn];
+  const ci = TODAY_DATE.getDay() === 0 ? 7 : TODAY_DATE.getDay();
+  const monday = new Date(TODAY_DATE); monday.setDate(TODAY_DATE.getDate() - (ci - 1));
+  const d = new Date(monday); d.setDate(monday.getDate() + (nextWeek ? 7 : 0) + (target - 1));
+  return d;
+}
+
+function parseButler(raw) {
+  const text = (raw || '').trim();
+  if (!text) return null;
+
+  /* 金额：29块9 / 29.9元 / ¥29.9 */
+  let amount = 0;
+  let m = text.match(/(\d+)\s*块\s*(\d)(?!\d)/);
+  if (m) amount = parseFloat(m[1] + '.' + m[2]);
+  if (!amount && (m = text.match(/(\d+(?:\.\d+)?)\s*(?:块|元|圆)/))) amount = parseFloat(m[1]);
+  if (!amount && (m = text.match(/[¥￥]\s*(\d+(?:\.\d+)?)/))) amount = parseFloat(m[1]);
+
+  /* 数量 + 单位 */
+  let qty = 0, unit = '';
+  if ((m = text.match(/(\d+)\s*(卷|个|瓶|包|条|袋|盒|提|片)/))) { qty = parseInt(m[1]); unit = m[2]; }
+
+  /* 购买公共用品 */
+  if (/买|购|补充|添|囤/.test(text)) {
+    const hit = S.supplies.find(s => s.kind === 'public' && text.includes(s.name));
+    const people = /各买各|我自己|私人/.test(text) ? [ME] : living().map(x => x.id);
+    return { type:'buy', supply: hit, name: hit ? hit.name : '公共用品',
+             qty: qty || (hit ? hit.min : 1), unit: unit || (hit ? hit.unit : '件'),
+             amount, people };
+  }
+
+  /* 离家 */
+  if (/离家|回老家|出差|不在家|外出|旅行|回家住|出去几天/.test(text)) {
+    let from = null, to = null;
+    if ((m = text.match(/(下?)周([一二三四五六日天]).{0,3}?到.{0,3}?(下?)周?([一二三四五六日天])/))) {
+      from = weekdayDate(m[2], m[1] === '下');
+      to   = weekdayDate(m[4], (m[3] === '下') || (m[1] === '下'));
+      if (to < from) to.setDate(to.getDate() + 7);
+    } else if ((m = text.match(/(\d+)月(\d+)[日号].{0,3}?到.{0,3}?(?:(\d+)月)?(\d+)[日号]/))) {
+      from = new Date(2026, +m[1] - 1, +m[2]);
+      to   = new Date(2026, (m[3] ? +m[3] : +m[1]) - 1, +m[4]);
+    }
+    if (from && to) {
+      const days = Math.round((to - from) / 86400000) + 1;
+      return { type:'away', from: fmtDate(from), to: fmtDate(to), days };
+    }
+    return { type:'away', from:'', to:'', days:0, needDates:true };
+  }
+
+  /* 访客 */
+  if (/访客|朋友来|来玩|过夜|留宿|住一晚|来住/.test(text)) {
+    return { type:'visit', overnight: /过夜|留宿|住一晚|住几天/.test(text) };
+  }
+
+  /* 不好开口 */
+  if (/不好开口|不好意思说|难开口|有点介意|忍很久/.test(text)) return { type:'awkward' };
+
+  return { type:'unknown', text };
+}
+
+function butlerSheet(raw) {
+  const p = parseButler(raw);
+  if (!p) return;
+
+  if (p.type === 'awkward') { closeSheet(); awkwardSheet(); return; }
+
+  if (p.type === 'unknown') {
+    openSheet(`<h3>管家没有完全听懂</h3>
+      <p class="hint">为了不把事情做错，管家只在能明确理解时才会执行。你可以换个说法，或者直接选一件事。</p>
+      ${understandBox('你说的是', [uline('原话', `<span style="font-weight:400">${p.text}</span>`)])}
+      <div class="stack">
+        <button class="btn wide" data-act="butlerFill" data-text="我刚买了29块9的厕纸，12卷，三个人平分">我买了公共用品</button>
+        <button class="btn wide" data-act="butlerFill" data-text="我下周三到周日回老家">我要离开几天</button>
+        <button class="btn wide" data-act="newVisit">我有访客要来</button>
+        <button class="btn wide" data-act="awkward">有件事不好开口</button>
+      </div>
+      <div class="acts"><button class="btn" data-act="close">关闭</button></div>`);
+    return;
+  }
+
+  if (p.type === 'buy') {
+    const per = p.amount / p.people.length;
+    S.pending = p;
+    const after = (p.supply ? p.supply.qty : 0) + p.qty;
+    openSheet(`<h3>管家理解成这样</h3>
+      <p class="hint">这会同时改变库存和账单，所以先确认一下再执行。</p>
+      ${understandBox('理解结果', [
+        uline('物品', p.name),
+        uline('库存变化', p.supply ? `${p.supply.qty} → ${after} ${p.unit}` : `+${p.qty} ${p.unit}`),
+        uline('金额', yuan(p.amount)),
+        uline('付款人', `${av(ME, 'sm')}${mem(ME).name}`),
+        uline('参与分摊', p.people.map(x => av(x, 'sm')).join('')),
+        uline('每人承担', `<span style="color:var(--jade)">${yuan(per)}</span>`)
+      ])}
+      ${impactBox([
+        `${p.name}库存更新为 ${after} ${p.unit}`,
+        p.supply && after >= p.supply.min ? '首页的库存不足提醒会消失' : '库存仍低于提醒水位，提醒会保留',
+        `账单新增一笔 ${yuan(p.amount)} 的公共支出，每人 ${yuan(per)}`,
+        'House 动态增加一条记录'
+      ])}
+      ${acts('doBuy', '确认并执行')}`);
+    return;
+  }
+
+  if (p.type === 'away') {
+    if (p.needDates) { closeSheet(); awaySheet(); return; }
+    S.pending = p;
+    const affected = S.tasks.filter(t => t.who === ME && !t.done);
+    openSheet(`<h3>管家理解成这样</h3>
+      <p class="hint">离家会影响值日、采购和费用分摊，确认后这些都会自动跟着调整。</p>
+      ${understandBox('理解结果', [
+        uline('类型', '离家'),
+        uline('时间', `${p.from} — ${p.to}`),
+        uline('天数', `${p.days} 天`),
+        uline('成员', `${av(ME, 'sm')}${mem(ME).name}`)
+      ])}
+      ${impactBox([
+        `值日：期间你的 ${affected.length} 项任务会暂缓，后续轮换补偿`,
+        '公共采购：这段时间不会分配采购任务给你',
+        `费用：月末水电可按实际居住天数计算，你的居住天数为 ${30 - p.days} 天`,
+        'House 状态和头像会显示为离家中'
+      ])}
+      ${acts('doAway', '确认离家')}`);
+    return;
+  }
+
+  if (p.type === 'visit') { closeSheet(); visitSheet(p.overnight); }
+}
+
+/* ============================================================
+   入住共识问卷
+   ============================================================ */
+const QUIZ = [
+  { k:'sleep',    q:'工作日一般几点睡？',            h:'知道彼此的作息，很多噪音问题就不会发生。', o:['23:00 左右','23:45 左右','00:30 左右','更晚'] },
+  { k:'quiet',    q:'几点之后希望家里保持安静？',      h:'这一条最容易形成明确规则。',            o:['22:30','23:00','23:30','00:00'] },
+  { k:'visitor',  q:'朋友来家里坐坐，你的接受程度？',  h:'先说清楚，来客人时才不会互相猜。',        o:['都可以，不用特意说','提前说一声','尽量约在外面'] },
+  { k:'overnight',q:'同一个朋友一周留宿几晚比较合适？', h:'留宿是合租里最常见的摩擦来源。',          o:['尽量不留宿','每周 ≤1 晚','每周 ≤2 晚','不限'] },
+  { k:'kitchen',  q:'厨房用完，什么程度算恢复？',      h:'把"干净"写成具体标准，比互相提醒有用。',   o:['台面擦净，锅具当天洗','大致收一下就行','第二天一起收拾'] },
+  { k:'supply',   q:'公共用品你更偏好哪种方式？',      h:'决定要不要建立统一采购和 AA。',          o:['统一采购 AA','各买各的','谁用得多谁买'] },
+  { k:'temp',     q:'公共空间空调多少度比较舒服？',    h:'温度差异不大，但夏天最容易积累情绪。',     o:['24°C','25°C','26°C','27°C'] },
+  { k:'social',   q:'你希望的室友关系是？',           h:'没有对错，说清楚就好。',                o:['礼貌互不打扰','偶尔一起聊天吃饭','希望成为朋友'] },
+  { k:'conflict', q:'如果室友的行为影响到你，你更希望？', h:'这决定了管家以后用什么方式提醒。',       o:['私下直接说','系统先中立提醒','House 一起讨论'] },
+  { k:'smoke',    q:'家里能否吸烟？',                 h:'包括阳台。',                          o:['家里都不吸','阳台可以','都可以'] },
+  { k:'cook',     q:'你的做饭频率大概是？',           h:'和厨房清洁、油烟、冰箱分区都有关。',      o:['几乎不做饭','偶尔做饭','经常做饭'] },
+  { k:'pet',      q:'关于宠物，你的情况是？',         h:'提前说明，避免入住后才发现不合适。',      o:['不养，也不希望有','不养，可以接受','我有宠物'] }
+];
+
+function quizSheet() {
+  const q = QUIZ[S.quiz.step];
+  const cur = S.quiz.answers[q.k];
+  openSheet(`
+    <div class="prog">${QUIZ.map((_, i) => `<i class="${i <= S.quiz.step ? 'on' : ''}"></i>`).join('')}</div>
+    <div class="qnum">第 ${S.quiz.step + 1} / ${QUIZ.length} 题</div>
+    <div class="qtitle">${q.q}</div>
+    <div class="qhint">${q.h}</div>
+    <div class="opts">${q.o.map(o => `
+      <button class="opt" data-act="quizPick" data-v="${o}" aria-pressed="${cur === o}">${o}
+        <span class="ok">${svg(I.check, 2.4)}</span></button>`).join('')}</div>
+    <div class="acts">
+      ${S.quiz.step > 0 ? '<button class="btn" data-act="quizBack">上一题</button>' : '<button class="btn" data-act="close">稍后再说</button>'}
+      <button class="btn pri" data-act="quizNext" ${cur ? '' : 'disabled'}>${S.quiz.step === QUIZ.length - 1 ? '看看结果' : '下一题'}</button>
+    </div>`);
+}
+
+/* ============================================================
+   有件事不好开口 —— 情绪 → 问题 → 诉求 → 可执行规则
+   ============================================================ */
+const AWK_CATS = [
+  { k:'卫生', s:'厨房、卫生间、公共区域的清洁' },
+  { k:'噪音', s:'作息、外放、说话声音' },
+  { k:'访客', s:'来访频率、留宿、公共空间占用' },
+  { k:'钱',   s:'分摊方式、垫付、结算' },
+  { k:'空间', s:'冰箱、储物、私人区域边界' },
+  { k:'物品', s:'借用、消耗、损坏' },
+  { k:'其他', s:'不属于以上的情况' }
+];
+/* 每类问题背后，通常真正涉及的几个点 */
+const AWK_FOCUS = {
+  访客: ['留宿频率', '公共空间占用', '实际居住人数', '水电公平'],
+  卫生: ['清洁标准不一致', '恢复时限', '公共区域责任划分'],
+  噪音: ['安静时间', '外放与耳机', '洗衣与家务时段'],
+  钱:   ['分摊方式', '结算周期', '谁垫付'],
+  空间: ['分区边界', '公共区域堆放', '私人空间'],
+  物品: ['借用方式', '公共消耗品补充', '损坏赔偿'],
+  其他: ['需要建立新的约定']
+};
+const AWK_SUGGEST = {
+  '留宿频率': '同一访客每周最多留宿 2 晚，更多次数提前征求其他室友意见。',
+  '实际居住人数': '长期多住一人时，水电按实际居住人数分摊。',
+  '公共空间占用': '访客在公共区域停留时，公共物品与空间仍按原有分区使用。',
+  '水电公平': '当月有人长期多住或长期不在时，水电按实际居住天数或人数计算。',
+  '清洁标准不一致': '厨房使用后当天恢复：台面无明显油污、厨余当天处理、锅具当天清洗。',
+  '恢复时限': '公共区域使用后当天恢复，不留到第二天。',
+  '安静时间': '23:30 后保持安静，外放改用耳机。',
+  '分摊方式': '公共费用默认平均分摊，出现长期离家时可改按居住天数。',
+  '分区边界': '冰箱、储物柜、置物架和鞋柜按现有分区使用，需要调整先在 House 里说一声。',
+  '借用方式': '可借物品按主人写下的方式使用，用后归位。'
+};
+
+function awkwardSheet() {
+  const a = S.awk;
+
+  /* 第一步：类型 */
+  if (a.step === 0) return openSheet(`
+    <h3>有件事不好开口</h3>
+    <p class="hint">先选一个类型。管家不会把你说的内容直接发给任何人，最后要不要开口、以什么方式开口，都由你决定。</p>
+    <div class="opts">${AWK_CATS.map(c => `
+      <button class="opt" data-act="awkCat" data-k="${c.k}">
+        <span><b style="font-family:var(--f-d)">${c.k}</b>
+        <span style="display:block;font-size:12.5px;color:var(--ink-3);font-weight:400">${c.s}</span></span>
+        <span class="ok">${svg(I.check, 2.4)}</span></button>`).join('')}</div>
+    <div class="safety" style="margin-top:14px;padding:13px">
+      <h3 style="font-size:14.5px">${svg(I.shield)}如果涉及人身安全</h3>
+      <p style="font-size:13px;margin-top:5px">威胁、暴力、骚扰、偷拍、强闯房间，不要走这条协商流程。</p>
+      <div class="btnrow" style="margin-top:10px"><button class="btn danger sm" data-act="safety">进入安全处理</button></div>
+    </div>
+    <div class="acts"><button class="btn" data-act="close">取消</button></div>`);
+
+  /* 第二步：自然表达 */
+  if (a.step === 1) return openSheet(`
+    <h3>发生了什么</h3>
+    <p class="hint">用你自己的话说就行，不用组织语言。管家会帮你把它整理成可以讨论的问题。</p>
+    <div class="fld"><textarea id="awkText" placeholder="例如：Alex 女朋友最近基本天天来，感觉已经不是偶尔来玩了。">${a.text || ''}</textarea></div>
+    <button class="bq" data-act="awkFill" data-text="Alex 女朋友最近基本天天来，感觉已经不是偶尔来玩了。">用这个例子试试</button>
+    <div class="acts"><button class="btn" data-act="awkBack">上一步</button>
+      <button class="btn pri" data-act="awkAnalyze">让管家看看</button></div>`);
+
+  /* 第三步：识别真正涉及什么 */
+  if (a.step === 2) {
+    const focuses = AWK_FOCUS[a.cat] || AWK_FOCUS['其他'];
+    return openSheet(`
+      <h3>管家的理解</h3>
+      <p class="hint">你说的这件事，通常不只是一个问题。先确认你最想解决的是哪一个。</p>
+      ${understandBox('你描述的情况', [
+        uline('类型', a.cat),
+        `<div class="uline"><span class="ul">原话</span><span class="uv" style="font-weight:400;font-family:var(--f-b);text-align:right">${a.text}</span></div>`
+      ])}
+      <div style="font-size:13px;color:var(--ink-2);margin-bottom:9px">这件事可能涉及：</div>
+      <div class="vals" style="margin-bottom:16px">${focuses.map(f => `<span class="val" style="padding-left:10px">${f}</span>`).join('')}</div>
+      <div style="font-size:13.5px;font-weight:600;margin-bottom:9px">你最希望解决什么？</div>
+      <div class="opts">${focuses.map(f => `
+        <button class="opt" data-act="awkFocus" data-k="${f}">${f}<span class="ok">${svg(I.check, 2.4)}</span></button>`).join('')}</div>
+      <div class="acts"><button class="btn" data-act="awkBack">上一步</button></div>`);
+  }
+
+  /* 第四 + 五步：现有规则 + 三个方向 */
+  if (a.step === 3) {
+    const existing = S.rules.find(r =>
+      r.title.includes(a.focus.slice(0, 2)) || (a.focus === '留宿频率' && r.id === 'r2'));
+    const sug = AWK_SUGGEST[a.focus] || '把这件事写成一条大家都认可的具体约定。';
+    return openSheet(`
+      <h3>${a.focus}</h3>
+      <p class="hint">先看 House 现在有没有相关约定，再决定怎么处理。</p>
+      ${existing
+        ? `<div class="card pad" style="box-shadow:none;margin-bottom:14px">
+            <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin-bottom:4px">House 现有规则</div>
+            <b style="font-family:var(--f-d);font-size:15px">${existing.title}</b>
+            <p style="font-size:13px;color:var(--ink-2);margin-top:3px">${existing.desc}</p>
+            <p style="font-size:12.5px;color:var(--ink-3);margin-top:7px">规则存在，但最近的实际情况和它有出入。这通常说明标准需要更具体，而不是有人故意不遵守。</p>
+          </div>`
+        : `<div class="notice" style="margin-bottom:14px">${svg(I.info)}<span>当前 House 还没有关于「${a.focus}」的明确约定。很多摩擦其实来自这里——没人说错话，只是从来没说清楚。</span></div>`}
+      <div style="font-size:13.5px;font-weight:600;margin-bottom:9px">你希望怎么处理</div>
+      <div class="opts">
+        <button class="opt" data-act="awkGo" data-w="private">
+          <span><b style="font-family:var(--f-d)">私下聊聊</b>
+          <span style="display:block;font-size:12.5px;color:var(--ink-3);font-weight:400">管家帮你把话整理得更中性，只发给相关的人</span></span></button>
+        <button class="opt" data-act="awkGo" data-w="house">
+          <span><b style="font-family:var(--f-d)">House 讨论</b>
+          <span style="display:block;font-size:12.5px;color:var(--ink-3);font-weight:400">不点名，把问题本身放到 House 里一起说</span></span></button>
+        <button class="opt" data-act="awkGo" data-w="rule" aria-pressed="true">
+          <span><b style="font-family:var(--f-d)">建立规则　<span class="pill ok">推荐</span></b>
+          <span style="display:block;font-size:12.5px;color:var(--ink-3);font-weight:400">${sug}</span></span></button>
+      </div>
+      <div class="acts"><button class="btn" data-act="awkBack">上一步</button></div>`);
+  }
+
+  /* 确认发起 */
+  if (a.step === 4) {
+    const sug = AWK_SUGGEST[a.focus] || '把这件事写成一条大家都认可的具体约定。';
+    const WAY = { private:'私下聊聊', house:'House 讨论', rule:'建立规则' };
+    return openSheet(`
+      <h3>${WAY[a.way]}</h3>
+      <p class="hint">${a.way === 'private'
+        ? '下面这段话已经去掉了情绪和指责，只描述事实和你的诉求。发出前你可以再改。'
+        : '发起后，其他室友会看到这个议题本身，不会看到你原本说的那段话，也不会显示是谁提的。'}</p>
+      ${a.way === 'private'
+        ? `<div class="fld"><label>整理后的表达</label><textarea id="awkFinal">最近想和你确认一下访客留宿的安排。House 现在的约定是同一访客每周最多留宿 2 晚，最近的频率好像超过了一些。你看我们要不要一起把这条重新定一下？</textarea></div>`
+        : `${understandBox('将发起的议题', [
+            uline('议题', a.focus),
+            uline('类型', a.cat),
+            uline('发起方式', WAY[a.way]),
+            uline('署名', '不显示发起人')
+          ])}
+          ${a.way === 'rule' ? `<div class="suggest" style="margin-bottom:14px"><div class="sl">建议规则</div><p>${sug}</p></div>` : ''}`}
+      ${impactBox(a.way === 'private'
+        ? ['这段话只会发给相关的人', 'House 里不会出现任何记录', '如果之后仍有问题，可以再升级为 House 讨论']
+        : ['「正在讨论」中新增一个议题', '其他室友会收到中立的提醒，不会看到是谁提的',
+           a.way === 'rule' ? '全员同意后自动成为 House 规则' : '讨论达成一致后可以转为规则'])}
+      <div class="acts"><button class="btn" data-act="awkBack">上一步</button>
+        <button class="btn pri" data-act="awkSubmit">${a.way === 'private' ? '发送' : '发起讨论'}</button></div>`);
+  }
+}
+
+/* ============================================================
+   安全事件
+   ============================================================ */
+function safetySheet() {
+  openSheet(`
+    <div class="safety" style="border:0;background:none;padding:0">
+      <h3>${svg(I.shield)}这类情况不建议自行协商</h3>
+      <p>威胁、暴力、骚扰、偷拍、强行进入私人空间，都不属于可以"好好沟通"解决的室友摩擦。
+         请优先保证自己的安全，再考虑其他事情。</p>
+      <div class="safeacts">
+        <button class="safeact" data-act="safeAct" data-k="record">${svg(I.note)}保存事件记录<span class="ar">${svg(I.chev)}</span></button>
+        <button class="safeact" data-act="safeAct" data-k="platform">${svg(I.home)}联系租赁平台 / ${HOUSE.steward}<span class="ar">${svg(I.chev)}</span></button>
+        <button class="safeact" data-act="safeAct" data-k="contact">${svg(I.phone)}联系紧急联系人<span class="ar">${svg(I.chev)}</span></button>
+        <button class="safeact" data-act="safeAct" data-k="police">${svg(I.alert)}求助与报警指引<span class="ar">${svg(I.chev)}</span></button>
+      </div>
+      <p style="font-size:12px;color:var(--ink-3);margin-top:13px">
+        记录只保存在你自己这里，其他室友看不到，也不会出现在 House 动态中。</p>
+    </div>
+    <div class="acts"><button class="btn" data-act="close">返回</button></div>`);
+}
+
+/* ============================================================
+   各类登记
+   ============================================================ */
+function restockSheet(id) {
+  const s = S.supplies.find(x => x.id === id);
+  const defQty = Math.max(s.min * 2, 4), defAmt = s.name === '厕纸' ? 29.9 : 20;
+  openSheet(`<h3>补充${s.name}</h3>
+    <p class="hint">填了金额，账单里会自动生成一笔对应的公共支出，不用再单独记一次。</p>
+    <div class="fld"><label for="rq">新增数量（${s.unit}）</label><input type="number" id="rq" min="1" value="${defQty}" inputmode="numeric"></div>
+    <div class="fld"><label for="ra">购买金额（元，留空则只更新库存）</label><input type="number" id="ra" min="0" step="0.01" value="${defAmt}" inputmode="decimal"></div>
+    <div class="understand"><div class="uh">分摊预览</div><div class="ub" id="rPrev"></div></div>
+    ${acts('doRestock', '确认补充')}`);
+  const upd = () => {
+    const q = parseInt(document.getElementById('rq').value) || 0;
+    const a = parseFloat(document.getElementById('ra').value) || 0;
+    document.getElementById('rPrev').innerHTML =
+      uline('库存变化', `${s.qty} → ${s.qty + q} ${s.unit}`) +
+      uline('付款人', `${av(ME, 'sm')}${mem(ME).name}`) +
+      uline('参与分摊', living().map(x => av(x.id, 'sm')).join('')) +
+      uline('每人承担', a > 0 ? `<span style="color:var(--jade)">${yuan(a / living().length)}</span>` : '不产生费用');
+  };
+  upd();
+  document.getElementById('rq').addEventListener('input', upd);
+  document.getElementById('ra').addEventListener('input', upd);
+  sheetEl().dataset.sid = id;
+}
+
+function billSheet() {
+  openSheet(`<h3>记一笔公共费用</h3>
+    <p class="hint">默认平均分摊。有人长期不在家时，可以改成按实际居住天数。</p>
+    <div class="fld"><label for="bt">费用名称</label><input type="text" id="bt" placeholder="例如：9月水电费"></div>
+    <div class="fld"><label for="ba">金额（元）</label><input type="number" id="ba" min="0" step="0.01" placeholder="0.00" inputmode="decimal"></div>
+    <div class="fld"><label for="bp">垫付人</label><select id="bp">${living().map(m => `<option value="${m.id}" ${m.id === ME ? 'selected' : ''}>${m.name}${m.id === ME ? '（你）' : ''}</option>`).join('')}</select></div>
+    <div class="fld"><label>参与成员</label><div class="who-pick" id="bw">${living().map(m => `<button type="button" data-m="${m.id}" aria-pressed="true">${av(m.id, 'sm')}${m.name}</button>`).join('')}</div></div>
+    <div class="fld"><label for="bm">分摊方式</label><select id="bm">
+      <option value="even">平均分摊</option>
+      <option value="days">按实际居住天数</option></select></div>
+    <div class="understand"><div class="uh">分摊预览</div><div class="ub" id="bPrev"></div></div>
+    ${acts('doBill', '保存')}`);
+  const upd = () => {
+    const a = parseFloat(document.getElementById('ba').value) || 0;
+    const people = [...sheetEl().querySelectorAll('#bw button[aria-pressed="true"]')].map(b => b.dataset.m);
+    const method = document.getElementById('bm').value;
+    let lines = '';
+    if (method === 'days') {
+      const rows = people.map(id => {
+        const off = S.away.filter(x => x.who === id).reduce((n, x) => n + x.days, 0);
+        return { id, days: 30 - off, off };
+      });
+      const tot = rows.reduce((n, r) => n + r.days, 0) || 1;
+      lines = rows.map(r => uline(`${mem(r.id).name}<span style="font-weight:400;color:var(--ink-3)"> ${r.days} 天</span>`,
+        yuan(a * r.days / tot))).join('');
+    } else {
+      lines = people.map(id => uline(mem(id).name, yuan(a / (people.length || 1)))).join('');
+    }
+    document.getElementById('bPrev').innerHTML = lines || uline('提示', '至少选择一位成员');
+  };
+  upd();
+  ['ba', 'bm'].forEach(i => document.getElementById(i).addEventListener('input', upd));
+  document.getElementById('bm').addEventListener('change', upd);
+  sheetEl().querySelectorAll('#bw button').forEach(b => b.addEventListener('click', () => {
+    const on = b.getAttribute('aria-pressed') === 'true';
+    if (on && sheetEl().querySelectorAll('#bw button[aria-pressed="true"]').length === 1) return;
+    b.setAttribute('aria-pressed', on ? 'false' : 'true'); upd();
+  }));
+}
+
+function visitSheet(presetOvernight) {
+  const rule = S.rules.find(r => r.id === 'r2');
+  openSheet(`<h3>登记一位访客</h3>
+    <p class="hint">普通到访只需要告知。留宿会对照 House 当前的约定，超过约定不会被禁止，只是先问问大家。</p>
+    <div class="fld"><label for="vg">访客称呼</label><input type="text" id="vg" value="朋友"></div>
+    <div class="fld"><label for="vw">时间</label><input type="text" id="vw" value="今晚 19:00–22:00"></div>
+    <div class="fld"><label>是否留宿</label><div class="who-pick" id="vo">
+      <button type="button" data-v="0" aria-pressed="${!presetOvernight}">不留宿</button>
+      <button type="button" data-v="1" aria-pressed="${!!presetOvernight}">留宿</button></div></div>
+    <div id="vCheck"></div>
+    ${acts('doVisit', '登记')}`);
+  const upd = () => {
+    const on = sheetEl().querySelector('#vo button[aria-pressed="true"]').dataset.v === '1';
+    const n = S.nights[ME] + 1;
+    document.getElementById('vCheck').innerHTML = !on ? `
+      <div class="notice">${svg(I.info)}<span>普通到访只需要告知其他室友，不需要征求同意。</span></div>`
+      : n <= 2 ? `
+      <div class="notice" style="background:var(--jade-soft);color:var(--jade-ink)">${svg(I.check)}<span>
+        这是本周第 ${n} 晚，符合当前约定：${rule.title}。</span></div>`
+      : `<div class="fair"><div class="fh">${svg(I.info)}本次将超过 House 当前约定</div>
+        <p>这是本周第 ${n} 晚，当前约定是每周最多 2 晚。这不会被禁止，但建议先征求其他室友的意见。</p></div>`;
+  };
+  upd();
+  sheetEl().querySelectorAll('#vo button').forEach(b => b.addEventListener('click', () => {
+    sheetEl().querySelectorAll('#vo button').forEach(x => x.setAttribute('aria-pressed', 'false'));
+    b.setAttribute('aria-pressed', 'true'); upd();
+  }));
+}
+
+function awaySheet() {
+  openSheet(`<h3>登记离家</h3>
+    <p class="hint">登记之后，值日、公共采购和水电分摊都会跟着调整。</p>
+    <div class="fld"><label for="af">开始</label><input type="text" id="af" value="9月16日"></div>
+    <div class="fld"><label for="at">结束</label><input type="text" id="at" value="9月20日"></div>
+    <div class="fld"><label for="ad">天数</label><input type="number" id="ad" value="5" min="1"></div>
+    ${impactBox(['期间你的值日任务会暂缓，后续轮换补偿', '这段时间不会分配公共采购任务给你',
+                 '月末水电可按实际居住天数计算', 'House 状态显示为离家中'])}
+    ${acts('doAway2', '确认离家')}`);
+}
+
+function deferSheet(id) {
+  const t = S.tasks.find(x => x.id === id);
+  const cand = living().filter(m => m.id !== ME && statusOf(m.id) === 'home')
+    .map(m => ({ m, load: S.tasks.filter(x => x.who === m.id && !x.done).length }))
+    .sort((a, b) => a.load - b.load)[0];
+  openSheet(`<h3>今天做不了「${t.task}」</h3>
+    <p class="hint">说明一下原因就好。这不会被记成失误，也不会通知任何人你"没做"。</p>
+    <div class="opts">
+      <button class="opt" data-act="doDefer" data-k="away">今天不在家<span class="ok">${svg(I.check, 2.4)}</span></button>
+      <button class="opt" data-act="doDefer" data-k="busy">今天太忙<span class="ok">${svg(I.check, 2.4)}</span></button>
+      <button class="opt" data-act="doDefer" data-k="swap">想和别人换班<span class="ok">${svg(I.check, 2.4)}</span></button>
+    </div>
+    ${cand ? `<div class="notice" style="margin-top:13px">${svg(I.info)}<span>
+      如果选择换班，管家会推荐 <b>${cand.m.name}</b>：目前在家，本周待完成任务最少（${cand.load} 项）。
+      换班需要对方同意，不会自动指派。</span></div>` : ''}
+    <div class="acts"><button class="btn" data-act="close">取消</button></div>`);
+  sheetEl().dataset.tid = id;
+  if (cand) sheetEl().dataset.cand = cand.m.id;
+}
+
+function stewardSheet() {
+  const it = S.issues[0];
+  const rule = it ? S.rules.find(r => r.id === it.rule) : null;
+  openSheet(`<h3>管家协调摘要</h3>
+    <p class="hint">这份摘要只描述规则和现状之间的差距，不评价任何人。提交前你可以看到全部内容。</p>
+    ${understandBox('将提交给 ' + HOUSE.steward, [
+      uline('House', HOUSE.name),
+      uline('当前问题', it ? it.title : '—'),
+      uline('对应规则', rule ? rule.title : '暂无相关规则'),
+      uline('最近情况', it ? `${it.window}出现 ${it.count} 次提醒` : '—'),
+      uline('已尝试', '系统中立提醒 → 重新明确规则'),
+      uline('当前诉求', '希望协助组织一次标准确认')
+    ])}
+    <div class="notice" style="margin-bottom:14px">${svg(I.info)}<span>摘要中不包含任何成员的姓名和具体行为描述。</span></div>
+    ${acts('doSteward', '提交给管家')}`, true);
+}
+
+function clarifySheet(id) {
+  const it = S.issues.find(x => x.id === id);
+  const rule = S.rules.find(r => r.id === it.rule);
+  openSheet(`<h3>重新明确「${rule.title}」</h3>
+    <p class="hint">出现多次提醒，通常说明标准不够具体，而不是有人故意不做。把它拆成几条能判断的标准。</p>
+    <div class="opts">
+      ${['台面无明显油污', '厨余当天处理', '锅具当天清洗', '水槽不留过夜碗碟'].map(x => `
+        <button class="opt" data-act="clarifyPick" aria-pressed="true">${x}<span class="ok">${svg(I.check, 2.4)}</span></button>`).join('')}
+    </div>
+    ${impactBox(['这条规则的描述会更新为选中的具体标准', '「正在讨论」中新增一个议题，等待全员确认',
+                 '问题记录回到第 1 级，重新从中立提醒开始'])}
+    ${acts('doClarify', '发起重新确认')}`);
+  sheetEl().dataset.iid = id;
+}
