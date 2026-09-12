@@ -52,6 +52,9 @@ const MEMBERS = [
             sleep:'00:30 左右', social:'礼貌互不打扰', conflict:'系统先中立提醒', cook:'偶尔做饭', pet:'不养，可以接受' } }
 ];
 
+/* 最影响共同生活的四项，其余默认收起 */
+const KEY_PREFS = ['quiet', 'overnight', 'kitchen', 'temp'];
+
 const ME = 'yiming';
 /* 当前用户改过的偏好存在 state 里，这样刷新后不会丢 */
 const mem = id => {
@@ -165,7 +168,7 @@ const SEED = {
     { id:'v1', host:'alex', guest:'朋友', when:'今晚 19:00–22:00', overnight:false, status:'已告知' }
   ],
   /* 本周各成员同一访客已留宿的晚数 */
-  nights: { yiming:0, alex:1, tom:0 },
+  nights: { yiming:0, alex:3, tom:0 },
   visitAsks: [
     { id:'va1', host:'alex', text:'希望朋友本周额外留宿 1 晚', nights:3, replies:{} }
   ],
@@ -184,7 +187,7 @@ const SEED = {
     { id:'b5', title:'宽带费 9–11月', note:'联通 500M', amount:300, payer:'yiming',
       people:['yiming','alex','tom'], method:'even', settled:true, date:'9月1日' },
     { id:'b6', title:'厨房灯泡', note:'已报修，先自行更换', amount:28, payer:'alex',
-      people:['yiming','alex','tom'], method:'even', settled:true, date:'8月29日' }
+      people:['yiming','alex','tom'], method:'even', settled:true, date:'9月2日' }
   ],
   /* 月末水电预估，用于情境公平演示 */
   utilityForecast: { title:'9月水电费', amount:360, days:30 },
@@ -196,7 +199,7 @@ const SEED = {
     { id:'r3', title:'常用公共用品统一采购 AA',   cat:'物品', desc:'厕纸、垃圾袋、洗洁精等由当次发现缺货的人补充，费用三人平摊。', by:['yiming','alex','tom'], since:'6月1日', prefKey:'supply' },
     { id:'r4', title:'厨房使用后当天恢复',        cat:'清洁', desc:'台面无明显油污，厨余当天处理，锅具当天清洗。',   by:['yiming','alex','tom'], since:'8月20日', prefKey:'kitchen' },
     { id:'r5', title:'公共区域禁止吸烟',          cat:'其他', desc:'包括客厅、厨房、卫生间与阳台。',              by:['yiming','alex','tom'], since:'6月1日', prefKey:'smoke' },
-    { id:'r6', title:'访客留宿提前告知',          cat:'访客', desc:'至少提前一天在 House 里登记，方便大家安排。',   by:['yiming','alex','tom'], since:'6月1日' }
+    { id:'r6', title:'访客留宿提前告知',          cat:'访客', desc:'至少提前一天在家里登记一下，方便大家安排。',   by:['yiming','alex','tom'], since:'6月1日' }
   ],
 
   topics: [],
@@ -204,7 +207,7 @@ const SEED = {
   /* 居住问题记录：只记录规则与现状的偏差，不记录"谁违规" */
   issues: [
     { id:'i1', cat:'清洁', rule:'r4', title:'厨房恢复标准', level:3, count:2, window:'最近 14 天',
-      note:'这项规则可能存在理解差异，建议重新明确一次标准。' }
+      note:'这条约定可能存在理解差异，建议重新明确一次标准。' }
   ],
 
   feed: [
@@ -212,13 +215,15 @@ const SEED = {
     { who:'alex',  text:'完成了值日「卫生间简单整理」', t:'今天 09:20' },
     { who:'alex',  text:'登记了今晚 19:00–22:00 的访客', t:'昨天' },
     { who:'tom',   text:'登记了离家：9月8日 — 9月18日', t:'9月7日' },
-    { who:'sys',   text:'House 规则「厨房使用后当天恢复」被重新确认', t:'9月5日' }
+    { who:'sys',   text:'共同约定「厨房使用后当天恢复」被重新确认', t:'9月5日' }
   ],
 
   onboardDone: { yiming:'8月12日', alex:'6月30日', tom:'6月30日', lin:null },
   linDiscussed: false,
   moveout: null,
   myPrefs: {},
+  showAllPrefs: false,
+  demoPanel: false,
   quiz: { step:0, answers:{} },
   awk: { step:0, cat:'', text:'', focus:'', way:'rule' },
   pending: null
@@ -235,10 +240,21 @@ const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch
 const logFeed = (who, text) => { S.feed.unshift({ who, text, t:'刚刚' }); S.feed = S.feed.slice(0, 9); };
 
 /* ============ 派生计算 ============ */
-const shareOf = (b, who) => {
-  if (!b.people.includes(who)) return 0;
-  if (b.shares && b.shares[who] != null) return b.shares[who];
-  return b.amount / b.people.length;
+/* 分摊按"分"计算，余数依次给前几个人，保证各人金额相加等于总额。
+   否则 29.90 三人平分显示成 9.97×3 = 29.91，账目对不上。 */
+function splitOf(b) {
+  if (b.shares) return b.shares;
+  const cents = Math.round(b.amount * 100), n = b.people.length || 1;
+  const base = Math.floor(cents / n), extra = cents - base * n;
+  const out = {};
+  b.people.forEach((p, i) => out[p] = (base + (i < extra ? 1 : 0)) / 100);
+  return out;
+}
+const shareOf = (b, who) => splitOf(b)[who] || 0;
+/* 各人金额不完全相等时，单独显示的"每人"要标明是约数 */
+const perLabel = b => {
+  const v = Object.values(splitOf(b));
+  return (new Set(v).size === 1 ? '每人 ' : '每人约 ') + yuan(Math.max(...v));
 };
 const openBills   = () => S.bills.filter(b => !b.settled);
 const myDue       = () => openBills().filter(b => b.payer !== ME && b.people.includes(ME));
@@ -305,6 +321,16 @@ function linDiff() {
 /* 因新成员加入而需要重新确认的现有规则 */
 const rulesToRevisit = () => S.linDiscussed ? [] : linDiff().diff.filter(d => d.rule);
 
+/* 留宿约定：上限直接从规则文字里读，规则改了判断跟着改 */
+function overnightRule() {
+  const rule = S.rules.find(x => x.prefKey === 'overnight');
+  if (!rule) return null;
+  const m = (rule.title + rule.desc).match(/(\d+)\s*晚/);
+  const limit = m ? +m[1] : 2;
+  const actual = Math.max(0, ...living().map(x => S.nights[x.id] || 0));
+  return { rule, limit, actual, exceeded: actual > limit };
+}
+
 /* 入住共识结果：三位在住成员之间的一致与分歧 */
 function consensusResult() {
   const agree = [], talk = [];
@@ -320,7 +346,7 @@ const SUGGESTION = {
   overnight: '同一访客每周最多留宿 2 晚，更多次数提前征求其他室友意见。',
   temp: '公共空间空调设在 26°C，觉得热或冷的人自行调整个人房间。',
   quiet: '23:30 后保持安静，外放改用耳机。',
-  visitor: '朋友到访提前在 House 里说一声，不需要征得同意。',
+  visitor: '朋友到访提前在家里说一声，不需要征得同意。',
   kitchen: '厨房使用后当天恢复：台面无明显油污、厨余当天处理、锅具当天清洗。',
   supply: '常用公共用品统一采购，费用三人平摊。',
   smoke: '公共区域不吸烟，包括阳台。'

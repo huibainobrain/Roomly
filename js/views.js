@@ -21,37 +21,33 @@ const sec  = (t, sub, extra) =>
    首页 —— 这个家今天怎么样，我有什么要处理
    ============================================================ */
 function vHome() {
-  /* 值得留意的事 */
+  /* 值得留意：只说是什么类型的事，具体内容留给下面的待办，不重复两遍 */
   const watch = [];
-  lowSupplies().forEach(s => watch.push(`${s.name}只剩 ${s.qty} ${s.unit}，低于约定的 ${s.min} ${s.unit}`));
+  if (lowSupplies().length) watch.push('公共物品库存');
   const revisit = rulesToRevisit();
-  if (revisit.length) watch.push(`${incomingMember().name} 入住后，有 ${revisit.length} 项规则需要重新确认`);
+  if (revisit.length) watch.push('新室友约定确认');
 
   const calm = watch.length === 0;
-  const pulse = `
-    <div class="pulse ${calm ? 'calm' : 'watch'}">
-      <div class="pl">今天，家里怎么样</div>
-      <div class="pt">${calm ? '整体正常，没有需要协调的事' : `有 ${watch.length} 件事值得留意`}</div>
-      ${watch.length ? `<ul>${watch.map(w => `<li>${w}</li>`).join('')}</ul>` : ''}
+  const hero = `
+    <section class="hero ${calm ? 'calm' : 'watch'}">
+      <div class="hl">今天，家里怎么样</div>
+      <h1 class="ht">${calm ? '一切正常，没有需要协调的事' : `有 ${watch.length} 件事值得留意`}</h1>
+      ${watch.length ? `<div class="htags">${watch.map(w => `<span>${w}</span>`).join('')}</div>` : ''}
       <div class="glance">
         <span class="gl">${svg(I.home)}${homeCount()} 人在家</span>
         <span class="gl">${svg(I.guest)}今晚 ${tonightVisits().length} 位访客</span>
         <span class="gl">${svg(I.chore)}${myTasks().filter(t => t.due === '今天').length} 项任务待完成</span>
-        <span class="gl">${svg(I.talk)}${revisit.length} 条规则待确认</span>
+        <span class="gl">${svg(I.talk)}${revisit.length} 条约定待确认</span>
       </div>
-    </div>`;
+    </section>`;
 
-  /* 成员状态条 */
-  const strip = `<div class="mstrip">${MEMBERS.filter(m => !S.movedOut.includes(m.id)).map(m => {
+  /* 成员状态：一行轻量状态栏，不再用四张大卡重复左侧信息 */
+  const strip = `<div class="whobar">${MEMBERS.filter(m => !S.movedOut.includes(m.id)).map(m => {
     const st = statusOf(m.id);
     const away = S.away.find(a => a.who === m.id && a.active);
-    const sub = st === 'away' ? `${away.to} 回来` : st === 'incoming' ? `${m.joined} 入住` : m.prefs.sleep + '睡';
-    return `<div class="mcard ${st === 'incoming' ? 'ghost' : ''}">
-      <div class="top">${av(m.id, 'lg ' + (st === 'away' ? 'out' : ''))}
-        <span><span class="nm">${m.name}${m.me ? ' · 你' : ''}</span><span class="rm">${m.room}</span></span></div>
-      <div class="st ${st !== 'home' ? 'dim' : ''}"><i class="sdot ${st}"></i>${STATUS_TEXT[st]}</div>
-      <div class="st dim" style="font-size:11.5px">${sub}</div>
-    </div>`;
+    const tail = st === 'away' ? `${away.to}回` : st === 'incoming' ? `${m.joined}入住` : '在家';
+    return `<span class="who ${st}">${av(m.id, 'sm' + (st === 'home' ? '' : ' out'))}
+      <b>${m.name}${m.me ? '·你' : ''}</b><i class="sdot ${st}"></i>${tail}</span>`;
   }).join('')}</div>`;
 
   /* 今天需要你处理：最多 4 件，且必须与当前用户真的有关 */
@@ -72,7 +68,7 @@ function vHome() {
     </div></div>`);
 
   if (revisit.length) todos.push(`<div class="todo d"><span class="ic">${svg(I.talk)}</span><div class="bd">
-      <div class="k">新室友</div><div class="t">${incomingMember().name} 入住后有 ${revisit.length} 项规则需要重新确认</div>
+      <div class="k">新室友</div><div class="t">${incomingMember().name} 入住后有 ${revisit.length} 项约定需要重新确认</div>
       <div class="m">${revisit.map(r => r.rule.title).join(' · ')}</div>
       <div class="act"><button class="btn pri sm" data-act="go" data-tab="talk" data-sub="lin">参与讨论</button></div>
     </div></div>`);
@@ -85,24 +81,22 @@ function vHome() {
     </div></div>`);
 
   const todoBlock = todos.length
-    ? `<div class="stack">${todos.slice(0, 4).join('')}</div>`
+    ? `<div class="todos">${todos.slice(0, 4).join('')}</div>`
     : `<div class="card empty">今天没有需要你处理的事。<br>有新情况时，管家会主动提醒你。</div>`;
 
   return `
     ${strip}
-    ${pulse}
+    ${hero}
     ${sec('今天需要你处理', todos.length ? `${Math.min(todos.length,4)} 件` : '')}
     ${todoBlock}
     ${sec('跟管家说一句')}
     ${butlerBox()}
-    ${sec('House 动态', '共同生活的状态流，不是社交动态')}
-    <div class="card" style="padding:2px 16px">
-      <ul class="feed">${S.feed.map(f => `<li>
-        ${f.who === 'sys'
-          ? `<span class="sysic">${svg(I.spark)}</span><span class="tx"><b>合租管家</b> ${f.text}</span>`
-          : `${av(f.who)}<span class="tx"><b>${mem(f.who).name}</b> ${f.text}</span>`}
-        <span class="tm">${f.t}</span></li>`).join('')}</ul>
-    </div>`;
+    ${sec('家里动态', '共同生活的状态流，不是社交动态')}
+    <ul class="feed bare">${S.feed.map(f => `<li>
+      ${f.who === 'sys'
+        ? `<span class="sysic">${svg(I.spark)}</span><span class="tx"><b>合租管家</b> ${f.text}</span>`
+        : `${av(f.who)}<span class="tx"><b>${mem(f.who).name}</b> ${f.text}</span>`}
+      <span class="tm">${f.t}</span></li>`).join('')}</ul>`;
 }
 
 function butlerBox() {
@@ -144,6 +138,13 @@ function vLife() {
   };
   const flag = { chore: myTasks().filter(t => t.due === '今天').length, supply: lowSupplies().length,
                  guest: S.visitAsks.length, space:0, away:0, facility:0 };
+  const tile = id => {
+    const m = LIFE_MODS.find(x => x.id === id);
+    return `<button class="mod" data-act="go" data-tab="life" data-sub="${id}">
+      <span class="mi">${svg(m.icon)}</span>
+      <span><span class="mn">${m.name}${flag[id] ? `<span class="flag">${flag[id]}</span>` : ''}</span>
+      <span class="ms">${st[id]}</span></span></button>`;
+  };
 
   return `
     ${head('生活', '这个家此刻的运转状态。日常的事尽量自动进行，需要你的时候才会出现在首页。')}
@@ -157,12 +158,10 @@ function vLife() {
       <div class="tn"><div class="tl">报修</div><div class="tv">${HOUSE.repair.item} ${HOUSE.repair.status}</div>
         <div class="tsub">${HOUSE.repair.eta}</div></div>
     </div>
-    <div class="mods">${LIFE_MODS.map(m => `
-      <button class="mod" data-act="go" data-tab="life" data-sub="${m.id}">
-        <span class="mi">${svg(m.icon)}</span>
-        <span><span class="mn">${m.name}${flag[m.id] ? `<span class="flag">${flag[m.id]}</span>` : ''}</span>
-        <span class="ms">${st[m.id]}</span></span>
-      </button>`).join('')}</div>`;
+    ${sec('这几天会发生的', '和人、时间有关')}
+    <div class="mods">${['chore', 'guest', 'facility', 'away'].map(tile).join('')}</div>
+    ${sec('家里的东西和空间', '和物、边界有关')}
+    <div class="mods">${['supply', 'space'].map(tile).join('')}</div>`;
 }
 
 /* ---------- 值日 ---------- */
@@ -195,7 +194,7 @@ function vChore() {
     ${head('值日', '责任明确到人。谁临时不方便，可以换班或顺延，系统会记录原因而不是记录失误。')}
     ${sec('我的任务', `${mine.filter(t => !t.done).length} 项待完成`)}
     <div class="card rows">${mine.map(taskRow).join('') || '<div class="empty">这周你没有分到任务</div>'}</div>
-    ${sec('House 本周任务')}
+    ${sec('这周家里的分工')}
     <div class="card rows">${others.map(taskRow).join('')}</div>
     ${sec('责任分布', '最近 4 周')}
     <div class="card pad">
@@ -293,13 +292,13 @@ function vGuest() {
   const rule = S.rules.find(r => r.id === 'r2');
   return `
     ${backBtn('生活', 'life')}
-    ${head('访客', '普通到访只要说一声；留宿会对照 House 现在的约定，超过了也不是禁止，而是先问问大家。')}
+    ${head('访客', '普通到访只要说一声；留宿会对照 现在的约定，超过了也不是禁止，而是先问问大家。')}
     ${S.visitAsks.length ? `${sec('等待你回应')}
       <div class="stack">${S.visitAsks.map(a => `
         <div class="card pad">
           <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">${av(a.host, 'lg')}
             <span><b style="font-family:var(--f-d);font-size:15px">${mem(a.host).name} ${a.text}</b>
-            <div style="font-size:12.5px;color:var(--ink-3);margin-top:1px">本周第 ${a.nights} 晚，House 当前约定是每周最多 2 晚</div></span></div>
+            <div style="font-size:12.5px;color:var(--ink-3);margin-top:1px">本周第 ${a.nights} 晚，现在的约定是每周最多 2 晚</div></span></div>
           <div class="btnrow"><button class="btn pri sm" data-act="visitOk" data-id="${a.id}">同意</button>
             <button class="btn sm" data-act="visitTalk" data-id="${a.id}">想讨论一下</button></div>
         </div>`).join('')}</div>` : ''}
@@ -386,8 +385,7 @@ function vFacility() {
       <div class="row"><div class="main"><div class="ttl">${HOUSE.repair.item}报修 <span class="pill warn">${HOUSE.repair.status}</span></div>
         <div class="meta">${HOUSE.repair.eta}</div></div></div>
       <div class="row"><div class="main"><div class="ttl">${HOUSE.steward}</div>
-        <div class="meta">居住问题长期未解决时，可以请管家协调</div></div>
-        <div class="cta"><button class="btn sm" data-act="stewardBrief">生成协调摘要</button></div></div>
+        <div class="meta">居住问题长期没解决时，可以在问题记录里请管家协调</div></div></div>
     </div>`;
 }
 
@@ -439,7 +437,7 @@ function vBill() {
         <button class="btn pri sm" data-act="applyFair">采用这个方案</button>
         <button class="btn sm" data-act="keepEven">仍按平均分摊</button>
       </div>
-      <p style="font-size:12px;color:var(--ink-3);margin-top:9px">这只是一个建议。House 的分摊方式需要你们自己决定，系统不会替你们改。</p>
+      <p style="font-size:12px;color:var(--ink-3);margin-top:9px">这只是一个建议。家里的分摊方式需要你们自己决定，系统不会替你们改。</p>
     </div>` : ''}
 
     ${S.fairApplied ? `<div class="notice" style="margin-bottom:14px">${svg(I.check)}<span>${S.utilityForecast.title}已改为按实际居住天数计算，并已加入下方账单。其他费用维持原有方式。</span></div>` : ''}
@@ -447,7 +445,7 @@ function vBill() {
     ${sec('我的账目')}
     <div class="card pad" style="margin-bottom:4px">
       <div class="calcline"><span class="cl">待我支付</span><span class="cv">${yuan(myDueTotal())}</span></div>
-      <div class="calcline"><span class="cl">本月 House 公共支出</span><span class="cv">${yuan(monthTotal())}</span></div>
+      <div class="calcline"><span class="cl">本月共同支出</span><span class="cv">${yuan(monthTotal())}</span></div>
       <div class="calcline"><span class="cl">未结清笔数</span><span class="cv">${openBills().length} 笔</span></div>
     </div>
 
@@ -475,59 +473,64 @@ function vTalk() {
   const inc = incomingMember();
   const open = S.topics.filter(t => !t.done);
 
+  const d = linDiff();
+  const liveCount = open.length + (inc && revisit.length ? 1 : 0);
+
   return `
-    ${head('共识', '规则不是管人的，是让大家不用反复开口。低频地把事情说清楚，高频的部分交给系统执行。')}
+    ${head('共识', '约定不是管人的，是让大家不用反复开口。低频地把事情说清楚，高频的部分交给系统执行。')}
+
+    ${sec('正在讨论', liveCount ? `${liveCount} 项待你参与` : '暂时没有需要讨论的事')}
 
     ${inc && revisit.length ? `
-    <div class="card pad" style="border-color:var(--amber-line);margin-bottom:14px">
-      <div style="display:flex;gap:11px;align-items:center">
-        ${av(inc.id, 'lg')}
-        <div style="flex:1"><div style="font-family:var(--f-d);font-weight:600;font-size:15px">${inc.name} 将在 ${inc.joined} 入住 ${inc.room}</div>
-          <div style="font-size:13px;color:var(--ink-2);margin-top:2px">与 House 现状比较：${linDiff().same.length} 项一致，${linDiff().diff.length} 项存在差异</div></div>
-      </div>
-      <div class="btnrow" style="margin-top:12px"><button class="btn pri sm" data-act="go" data-tab="talk" data-sub="lin">只讨论这 ${linDiff().diff.length} 件事</button></div>
+    <div class="live">
+      <div class="lv-top">${av(inc.id, 'lg')}
+        <div style="flex:1"><b>${inc.name} 将在 ${inc.joined} 入住 ${inc.room}</b>
+          <span>和现在家里的情况比较：${d.same.length} 项一致，${d.diff.length} 项存在差异</span></div>
+        <span class="pill warn">待讨论</span></div>
+      <div class="lv-body">${d.diff.map(x => `<span class="val" style="padding-left:10px">${x.label} <b>${x.lin}</b></span>`).join('')}</div>
+      <div class="btnrow"><button class="btn pri sm" data-act="go" data-tab="talk" data-sub="lin">只讨论这 ${d.diff.length} 件事</button></div>
     </div>` : ''}
 
-    ${open.length ? `${sec('正在讨论', `${open.length} 项`)}
-    <div class="card rows">${open.map(t => `
-      <div class="row"><div class="main">
-        <div class="ttl">${t.title}<span class="pill warn">${Object.keys(t.votes || {}).length}/${living().length} 已表态</span></div>
-        <div class="meta">${t.detail}</div>
-        <div class="split">${living().map(m => t.votes && t.votes[m.id]
-          ? `<span class="chip">${av(m.id,'sm')}${t.votes[m.id]}</span>`
-          : `<span class="chip" style="opacity:.5">${av(m.id,'sm')}未表态</span>`).join('')}</div>
-      </div>
-      <div class="cta">${t.votes && t.votes[ME]
-        ? '<span class="pill ok">你已表态</span>'
-        : `<button class="btn pri sm" data-act="agreeTopic" data-id="${t.id}">同意</button>
-           <button class="btn sm" data-act="discussTopic" data-id="${t.id}">想讨论一下</button>`}</div>
-      </div>`).join('')}</div>` : ''}
+    ${open.map(t => `
+    <div class="live">
+      <div class="lv-top"><span class="lv-ic">${svg(I.talk)}</span>
+        <div style="flex:1"><b>${t.title}</b><span>${t.detail}</span></div>
+        <span class="pill warn">${Object.keys(t.votes || {}).length}/${living().length} 已表态</span></div>
+      <div class="lv-body">${living().map(m => t.votes && t.votes[m.id]
+        ? `<span class="chip">${av(m.id,'sm')}${t.votes[m.id]}</span>`
+        : `<span class="chip" style="opacity:.45">${av(m.id,'sm')}未表态</span>`).join('')}</div>
+      ${t.votes && t.votes[ME] ? '' : `<div class="btnrow">
+        <button class="btn pri sm" data-act="agreeTopic" data-id="${t.id}">同意</button>
+        <button class="btn sm" data-act="discussTopic" data-id="${t.id}">想讨论一下</button></div>`}
+    </div>`).join('')}
 
-    ${sec('当前规则', `${S.rules.length} 条 · 全员确认后生效`)}
-    <div class="card rows">${S.rules.map((r, i) => `
+    ${!liveCount ? '<div class="card empty">目前没有待讨论的事。有人提出新问题时会出现在这里。</div>' : ''}
+
+    ${sec('我们已经说好的', `${S.rules.length} 条 · 全员确认后生效`)}
+    <div class="agreed">${S.rules.map((r, i) => `
       <div class="ruleitem">
         <span class="rn">${i + 1}</span>
         <div class="rb"><div class="rt">${r.title}
-          <span class="pill ${r.by.length === living().length ? 'ok' : 'warn'}">${r.by.length}/${living().length} 已确认</span>
-          ${revisit.some(v => v.rule.id === r.id) ? '<span class="pill warn">新室友入住后需重新确认</span>' : ''}</div>
+          ${r.by.length < living().length ? `<span class="pill warn">${r.by.length}/${living().length} 已确认</span>` : ''}
+          ${revisit.some(v => v.rule.id === r.id) ? '<span class="pill warn">新室友入住后要重新确认</span>' : ''}</div>
           <div class="rd">${r.desc}</div>
           <div class="rd" style="color:var(--ink-4)">${r.cat} · ${r.since} 起</div></div>
       </div>`).join('')}</div>
 
     ${sec('其他')}
     <div class="mods">
+      <button class="mod" data-act="awkward">
+        <span class="mi">${svg(I.talk)}</span><span><span class="mn">有件事不好开口</span>
+        <span class="ms">把说不出口的情绪，整理成一件能讨论的事。</span></span></button>
       <button class="mod" data-act="go" data-tab="talk" data-sub="onboard">
         <span class="mi">${svg(I.note)}</span><span><span class="mn">入住共识</span>
         <span class="ms">住在一起之前先聊清楚的 12 个问题。你在 ${S.onboardDone[ME]} 填过一次。</span></span></button>
-      <button class="mod" data-act="awkward">
-        <span class="mi">${svg(I.talk)}</span><span><span class="mn">有件事不好开口</span>
-        <span class="ms">把说不出口的情绪，整理成一条能讨论的规则。</span></span></button>
       <button class="mod" data-act="go" data-tab="talk" data-sub="issue">
         <span class="mi">${svg(I.info)}</span><span><span class="mn">居住问题记录${S.issues.length ? `<span class="flag">${S.issues.length}</span>` : ''}</span>
-        <span class="ms">只记录规则与现状的偏差，不记录谁做错了什么。</span></span></button>
+        <span class="ms">只记录约定与现状的偏差，不记录谁做错了什么。</span></span></button>
       <button class="mod" data-act="go" data-tab="me">
         <span class="mi">${svg(I.me)}</span><span><span class="mn">我的生活偏好</span>
-        <span class="ms">随时可以修改，改动只会影响还没形成规则的部分。</span></span></button>
+        <span class="ms">随时可以修改，改动只会影响还没形成约定的部分。</span></span></button>
     </div>`;
 }
 
@@ -586,7 +589,7 @@ function vLin() {
     </div>
 
     <div class="resgrp agree">
-      <div class="gh">${svg(I.check)}${d.same.length} 项与 House 现状一致</div>
+      <div class="gh">${svg(I.check)}${d.same.length} 项和现在家里的情况一致</div>
       <div class="gb">${d.same.map(s => `<div class="ruleitem"><span class="rn">${svg(I.check)}</span>
         <div class="rb"><div class="rt">${s.label}</div><div class="rd">${s.house}</div></div></div>`).join('')}</div>
     </div>
@@ -595,12 +598,12 @@ function vLin() {
       <div class="gh">${svg(I.info)}${d.diff.length} 项存在差异</div>
       <div class="gb">${d.diff.map(t => `
         <div class="diffrow">
-          <div class="dt">${t.label}${t.rule ? '<span class="pill warn">涉及现有规则</span>' : '<span class="pill plain">暂无相关规则</span>'}</div>
+          <div class="dt">${t.label}${t.rule ? '<span class="pill warn">涉及现有约定</span>' : '<span class="pill plain">暂无相关约定</span>'}</div>
           <div class="vals">
-            <span class="val" style="padding-left:10px">House 现状 <b>${t.house}</b></span>
+            <span class="val" style="padding-left:10px">现在家里 <b>${t.house}</b></span>
             <span class="val">${av(inc.id, 'sm')}${inc.name} <b>${t.lin}</b></span>
           </div>
-          ${t.rule ? `<div class="rd" style="margin-top:7px;font-size:12.5px;color:var(--ink-3)">现有规则：${t.rule.title}</div>` : ''}
+          ${t.rule ? `<div class="rd" style="margin-top:7px;font-size:12.5px;color:var(--ink-3)">现有约定：${t.rule.title}</div>` : ''}
           ${SUGGESTION[t.k] ? `<div class="suggest"><div class="sl">管家建议</div><p>${SUGGESTION[t.k]}</p></div>` : ''}
         </div>`).join('')}</div>
     </div>
@@ -610,16 +613,16 @@ function vLin() {
 
     ${S.linDiscussed
       ? `<div class="card pad" style="border-color:var(--jade-line)"><b style="font-family:var(--f-d)">已发起讨论</b>
-         <p style="font-size:13.5px;color:var(--ink-2);margin-top:4px">这 ${d.diff.length} 项已进入「正在讨论」，全员表态后会更新为 House 规则。</p></div>`
+         <p style="font-size:13.5px;color:var(--ink-2);margin-top:4px">这 ${d.diff.length} 项已进入「正在讨论」，全员表态后会更新为共同约定。</p></div>`
       : `<button class="btn pri wide" data-act="discussLin">只讨论这 ${d.diff.length} 件事</button>`}`;
 }
 
 /* ---------- 居住问题记录 ---------- */
 const LADDER = [
-  { t:'系统中立提醒', d:'管家按规则提醒，不指向任何人' },
+  { t:'系统中立提醒', d:'管家按约定提醒，不指向任何人' },
   { t:'私下提醒',     d:'只发给相关的人，其他人看不到' },
-  { t:'重新明确规则', d:'多次出现，通常是理解不一致，而不是有人故意' },
-  { t:'House 共同讨论', d:'一起把标准定得更具体' },
+  { t:'重新明确约定', d:'多次出现，通常是理解不一致，而不是有人故意' },
+  { t:'家里一起讨论', d:'一起把标准定得更具体' },
   { t:'请管家协调',   d:'机构房源可以请管家出面，生成协调摘要' }
 ];
 
@@ -635,13 +638,14 @@ function vIssue() {
             <div style="font-size:13px;color:var(--ink-2);margin-top:3px">${it.window}，出现 ${it.count} 次提醒</div></div>
           <span class="pill plain">${it.cat}</span></div>
         <div class="notice" style="margin-top:11px">${svg(I.info)}<span>${it.note}</span></div>
-        ${rule ? `<div style="font-size:12.5px;color:var(--ink-3);margin-top:10px">对应规则：${rule.title} —— ${rule.desc}</div>` : ''}
+        ${rule ? `<div style="font-size:12.5px;color:var(--ink-3);margin-top:10px">对应约定：${rule.title} —— ${rule.desc}</div>` : ''}
         <div style="margin:14px 0 4px;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:700">当前处理到第 ${it.level} 级</div>
         <div class="ladder">${LADDER.map((l, i) => `
           <div class="lstep ${i + 1 === it.level ? 'on' : i + 1 < it.level ? 'past' : ''}">${l.t}<small>${l.d}</small></div>`).join('')}</div>
         <div class="btnrow" style="margin-top:13px">
           <button class="btn pri sm" data-act="clarifyRule" data-id="${it.id}">重新明确标准</button>
-          <button class="btn sm" data-act="stewardBrief">请管家协调</button></div>
+          ${it.level >= 4 ? `<button class="btn sm" data-act="stewardBrief">请管家协调</button>`
+            : `<span style="font-size:12px;color:var(--ink-3);align-self:center">升到第 4 级后，可以请管家介入</span>`}</div>
       </div>`;
     }).join('') || '<div class="card empty">当前没有记录中的居住问题</div>'}
 
@@ -666,7 +670,7 @@ function vMe() {
   const myThings = S.supplies.filter(s => s.owner === ME);
 
   return `
-    ${head('我的', '你在这个 House 里的状态、边界和责任。')}
+    ${head('我的', '你在这个家里的状态、边界和责任。')}
 
     <div class="card pad" style="margin-bottom:12px">
       <div style="display:flex;gap:13px;align-items:center">${av(ME, 'xl')}
@@ -678,10 +682,13 @@ function vMe() {
     </div>
 
     ${sec('我的生活偏好', '', `<button class="btn sm" data-act="startQuiz">重新填写</button>`)}
-    <div class="card pad">
-      <div class="vals">${PREF_KEYS.map(p => `<span class="val" style="padding-left:10px">${p.label} <b>${me.prefs[p.k]}</b></span>`).join('')}</div>
-      <p style="font-size:12.5px;color:var(--ink-3);margin-top:11px">已经形成 House 规则的部分，修改偏好不会自动改变规则，需要重新讨论。</p>
+    <div class="vals">${KEY_PREFS.map(k => { const p = PREF_KEYS.find(x => x.k === k);
+      return `<span class="val" style="padding-left:10px">${p.label} <b>${me.prefs[k]}</b></span>`; }).join('')}
+      ${S.showAllPrefs ? PREF_KEYS.filter(p => !KEY_PREFS.includes(p.k)).map(p =>
+        `<span class="val" style="padding-left:10px">${p.label} <b>${me.prefs[p.k]}</b></span>`).join('') : ''}
+      <button class="val linkish" data-act="togglePrefs">${S.showAllPrefs ? '收起' : `查看全部 ${PREF_KEYS.length} 项`}</button>
     </div>
+    <p style="font-size:12.5px;color:var(--ink-3);margin-top:10px">已经形成共同约定的部分，改偏好不会自动改约定，需要重新讨论。</p>
 
     ${sec('我的空间')}
     <div class="card rows">
@@ -716,9 +723,7 @@ function vMe() {
 
     ${sec('房屋服务', HOUSE.org)}
     <div class="card rows">
-      <div class="row"><div class="main"><div class="ttl">租赁机构</div><div class="meta">${HOUSE.org}</div></div></div>
-      <div class="row"><div class="main"><div class="ttl">管家</div><div class="meta">${HOUSE.steward}</div></div>
-        <div class="cta"><button class="btn sm" data-act="stewardBrief">生成协调摘要</button></div></div>
+      <div class="row"><div class="main"><div class="ttl">管家</div><div class="meta">${HOUSE.steward} · ${HOUSE.org}</div></div></div>
       <div class="row"><div class="main"><div class="ttl">下一次公区保洁</div><div class="meta">${HOUSE.nextClean}</div></div></div>
       <div class="row"><div class="main"><div class="ttl">${HOUSE.repair.item}报修</div><div class="meta">${HOUSE.repair.eta}</div></div>
         <div class="right"><span class="pill warn">${HOUSE.repair.status}</span></div></div>
@@ -727,7 +732,7 @@ function vMe() {
     ${sec('离开这个家')}
     <div class="card pad">
       <p style="font-size:13.5px;color:var(--ink-2)">搬出会生成一份清单：待结账单、私人物品、公共资产权益、空间清理、钥匙归还、值日退出。
-        全部完成后你就正式离开，而这个 House 会继续运行下去。</p>
+        全部完成后你就正式离开，而这个家 会继续运行下去。</p>
       <div class="btnrow" style="margin-top:12px">
         <button class="btn" data-act="go" data-tab="me" data-sub="moveout">查看搬出流程</button>
       </div>
@@ -743,7 +748,7 @@ function vMoveout() {
 
   return `
     ${backBtn('我的', 'me')}
-    ${head('搬出流程', '有人离开，有人搬进来，这个家不会被删除。规则、公共资产和空间会继续留在 House 里。')}
+    ${head('搬出流程', '有人离开，有人搬进来，这个家不会被删除。规则、公共资产和空间会继续留在这个家里。')}
     <div class="card pad" style="margin-bottom:12px">
       <div style="display:flex;gap:11px;align-items:center">${av(mo.who, 'lg')}
         <div style="flex:1"><div style="font-family:var(--f-d);font-weight:600;font-size:15.5px">${mem(mo.who).name} 计划 ${mo.date} 搬出</div>
@@ -756,7 +761,7 @@ function vMoveout() {
     </div>
     ${all ? `<div class="card pad" style="border-color:var(--jade-line)">
       <b style="font-family:var(--f-d);font-size:15px">${mem(mo.who).name} 已顺利离开 503</b>
-      <p style="font-size:13.5px;color:var(--ink-2);margin-top:5px">House 继续存在。${inc ? `${inc.name} 随后接管 ${mem(mo.who).room}、冰箱下层、储物柜 C 格、卫生间 C 层和鞋柜 C 区。` : ''}
+      <p style="font-size:13.5px;color:var(--ink-2);margin-top:5px">这个家会继续。${inc ? `${inc.name} 随后接管 ${mem(mo.who).room}、冰箱下层、储物柜 C 格、卫生间 C 层和鞋柜 C 区。` : ''}
         历史账单和规则都会保留下来。</p>
       <div class="btnrow" style="margin-top:11px"><button class="btn pri sm" data-act="finishMove">确认交接完成</button></div>
     </div>` : `<div class="notice">${svg(I.info)}<span>清单逐项完成后，交接才会生效。可以点击任意一项切换状态来预览这个流程。</span></div>`}`;

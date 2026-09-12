@@ -19,11 +19,11 @@ function render() {
       ${svg(t.icon)}<span>${t.label}</span>${b ? `<span class="dot">${b}</span>` : ''}</button>`;
   }).join('');
 
-  document.getElementById('roster').innerHTML = MEMBERS.filter(m => !S.movedOut.includes(m.id)).map(m => {
-    const st = statusOf(m.id);
-    return `<div class="rost">${av(m.id, 'sm')}<span class="nm">${m.name}${m.me ? ' · 你' : ''}</span>
-      <span class="st"><i class="sdot ${st}"></i>${STATUS_TEXT[st]}</span></div>`;
-  }).join('');
+  const roster = MEMBERS.filter(m => !S.movedOut.includes(m.id));
+  document.getElementById('roster').innerHTML =
+    roster.map(m => av(m.id, 'sm' + (statusOf(m.id) === 'home' ? '' : ' out'))).join('') +
+    `<span class="rmore">${homeCount()} 人在家</span>`;
+  document.getElementById('demoPanel').hidden = !S.demoPanel;
 
   const markSvg = svg('<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-5h5v5"/>');
   document.getElementById('markA').innerHTML = markSvg;
@@ -67,6 +67,8 @@ document.addEventListener('click', e => {
   case 'go': goTo(el.dataset.tab, el.dataset.sub); break;
   case 'close': closeSheet(); break;
   case 'seg': S.segment = el.dataset.k; render(); break;
+  case 'togglePrefs': S.showAllPrefs = !S.showAllPrefs; render(); break;
+  case 'demoPanel': S.demoPanel = !S.demoPanel; render(); break;
   case 'reset': S = structuredClone(SEED); render(); toast('演示数据已重置'); break;
 
   /* ---- 值日 ---- */
@@ -148,8 +150,8 @@ document.addEventListener('click', e => {
     S.topics.push({ id:'tp' + Date.now(), title:'访客留宿频率', done:false,
       detail:`由一次额外留宿请求引发。当前约定：同一访客每周最多留宿 2 晚。`, votes:{ [ME]:'想讨论一下' } });
     S.visitAsks = S.visitAsks.filter(x => x.id !== id);
-    logFeed('sys', '「访客留宿频率」进入 House 讨论');
-    goTo('talk'); toast('已转为 House 讨论，不会显示是谁提出的');
+    logFeed('sys', '「访客留宿频率」已提到家里一起讨论');
+    goTo('talk'); toast('已放到家里一起讨论，不会显示是谁提出的');
     break;
   }
 
@@ -226,7 +228,7 @@ document.addEventListener('click', e => {
       amount:S.utilityForecast.amount, payer:ME, people:living().map(m => m.id), method:'even',
       settled:false, date:TODAY });
     logFeed('sys', `${S.utilityForecast.title}维持平均分摊，每人 ${yuan(S.utilityForecast.amount / n)}`);
-    render(); toast('已维持平均分摊。分摊方式由你们决定，系统不会替 House 更改。');
+    render(); toast('已维持平均分摊。分摊方式由你们决定，系统不会替你们更改。');
     break;
   }
 
@@ -235,7 +237,7 @@ document.addEventListener('click', e => {
     const t = S.topics.find(x => x.id === id);
     t.votes = t.votes || {}; t.votes[ME] = '同意';
     if (Object.keys(t.votes).length >= living().length) finishTopic(t);
-    render(); toast(Object.keys(t.votes).length >= living().length ? '全员已表态，已成为 House 规则' : '已记录你的意见');
+    render(); toast(Object.keys(t.votes).length >= living().length ? '全员已表态，已成为共同约定' : '已记录你的意见');
     break;
   }
   case 'discussTopic': {
@@ -247,7 +249,7 @@ document.addEventListener('click', e => {
   case 'discussLin': {
     const d = linDiff();
     d.diff.forEach(x => S.topics.push({ id:'tp' + Date.now() + x.k, title:`${x.label}（${d.lin.name} 入住后）`,
-      done:false, detail:`House 现状 ${x.house}，${d.lin.name} 的偏好是 ${x.lin}。${SUGGESTION[x.k] || ''}`,
+      done:false, detail:`现在家里是 ${x.house}，${d.lin.name} 的偏好是 ${x.lin}。${SUGGESTION[x.k] || ''}`,
       votes:{ [ME]:'同意' }, prefKey:x.k }));
     S.linDiscussed = true;
     logFeed('sys', `${d.lin.name} 入住前的 ${d.diff.length} 项差异已进入讨论`);
@@ -259,7 +261,7 @@ document.addEventListener('click', e => {
     S.topics.push({ id:'tp' + Date.now(), title:PREF_KEYS.find(p => p.k === k).label, done:false,
       detail:SUGGESTION[k], votes:{ [ME]:'同意' }, prefKey:k });
     logFeed('sys', `「${PREF_KEYS.find(p => p.k === k).label}」的建议已提交全员确认`);
-    goTo('talk'); toast('已提交全员确认，三人同意后成为 House 规则');
+    goTo('talk'); toast('已提交全员确认，三人同意后成为共同约定');
     break;
   }
   case 'editSuggest': toast('可以在「正在讨论」里继续修改措辞，达成一致后再形成规则'); break;
@@ -285,7 +287,9 @@ document.addEventListener('click', e => {
   case 'awkAnalyze': {
     const v = document.getElementById('awkText').value.trim();
     if (!v) { toast('先说说发生了什么'); return; }
-    S.awk.text = v; S.awk.step = 2; awkwardSheet();
+    S.awk.text = v;
+    S.awk.readCat = detectCat(v) || S.awk.cat;
+    S.awk.step = 2; awkwardSheet();
     break;
   }
   case 'awkFocus': S.awk.focus = el.dataset.k; S.awk.step = 3; awkwardSheet(); break;
@@ -293,14 +297,37 @@ document.addEventListener('click', e => {
   case 'awkBack': S.awk.step = Math.max(0, S.awk.step - 1); awkwardSheet(); break;
   case 'awkSubmit': {
     const a = S.awk;
+    const existing = ruleFor(a.focus);
+    const gap = gapFor(a.focus);
+
     if (a.way === 'private') {
       closeSheet(); render();
-      toast('已私下发送。House 里不会留下任何记录。');
+      toast('已私下发送。家里动态中不会留下记录。');
+
+    } else if (a.way === 'remind') {
+      /* 已有约定就不再造新规则，只按约定发中立提醒并记入问题记录 */
+      logFeed('sys', `按共同约定发出提醒：${existing.title}`);
+      const ex = S.issues.find(i => i.rule === existing.id);
+      if (ex) { ex.count++; ex.level = Math.max(ex.level, 1); }
+      else S.issues.unshift({ id:'i' + Date.now(), cat:a.readCat || a.cat, rule:existing.id,
+        title:existing.title, level:1, count:1, window:'最近 7 天',
+        note:'已按现有约定发出中立提醒，暂不需要新增规则。' });
+      closeSheet(); goTo('talk', 'issue');
+      toast('提醒已发出，不指向任何人。这件事已有约定，没有新增规则。');
+
+    } else if (a.way === 'clarify') {
+      S.topics.push({ id:'tp' + Date.now(), title:'重新确认：' + existing.title, done:false,
+        detail:`${existing.desc}${gap ? ' 当前情况：' + gap.text : ''}`,
+        votes:{ [ME]:'同意' }, revisit:existing.id });
+      logFeed('sys', `「${existing.title}」进入重新确认`);
+      closeSheet(); goTo('talk');
+      toast('已发起重新确认，不会新增规则，只修改现有这一条');
+
     } else {
       S.topics.push({ id:'tp' + Date.now(), title:a.focus, done:false,
         detail: AWK_SUGGEST[a.focus] || `关于${a.focus}的约定，等待大家一起确认。`,
         votes:{ [ME]:'同意' } });
-      logFeed('sys', `House 新增讨论议题「${a.focus}」`);
+      logFeed('sys', `新增讨论议题「${a.focus}」`);
       closeSheet(); goTo('talk');
       toast('已发起讨论，不会显示是谁提出的');
     }
@@ -329,7 +356,7 @@ document.addEventListener('click', e => {
     render(); break;
   case 'safety': safetySheet(); break;
   case 'safeAct': {
-    const T = { record:'事件记录已保存在你的私人空间，其他室友看不到，也不会出现在 House 动态中。',
+    const T = { record:'事件记录已保存在你的私人空间，其他室友看不到，也不会出现在 家里动态中。',
                 platform:`正在为你接通${HOUSE.org.split(' · ')[0]}与${HOUSE.steward}（演示环境不会真正拨出）。`,
                 contact:'正在联系你设置的紧急联系人（演示环境不会真正拨出）。',
                 police:'紧急情况请直接拨打 110。演示环境不会代你拨号。' };
@@ -356,7 +383,7 @@ document.addEventListener('click', e => {
     }
     S.away = S.away.filter(a => a.who !== mo.who);
     logFeed('sys', `${mem(mo.who).name} 已完成搬出交接${inc ? `，${inc.name} 接管了 ${mo.who === 'tom' ? '03室' : ''}与相关分区` : ''}`);
-    goTo('me'); toast(`${mem(mo.who).name} 已顺利离开 503。House 继续存在。`);
+    goTo('me'); toast(`${mem(mo.who).name} 已顺利离开 503。这个家会继续。`);
     break;
   }
 
@@ -421,9 +448,16 @@ function addAway(from, to, days) {
 
 function finishTopic(t) {
   t.done = true;
+  /* 重新确认的议题只更新原规则，不会多出一条内容相近的新规则 */
+  if (t.revisit) {
+    const r = S.rules.find(x => x.id === t.revisit);
+    if (r) { r.desc = t.detail; r.since = TODAY; r.by = living().map(m => m.id); }
+    logFeed('sys', `「${r ? r.title : t.title}」已重新确认`);
+    return;
+  }
   S.rules.push({ id:'r' + Date.now(), title:t.title.replace(/（.*?）/, ''), cat:'共识',
     desc:t.detail, by:living().map(m => m.id), since:TODAY, prefKey:t.prefKey });
-  logFeed('sys', `「${t.title}」已获全员确认，成为 House 规则`);
+  logFeed('sys', `「${t.title}」已获全员确认，成为共同约定`);
 }
 
 function defaultMoveout() {

@@ -130,7 +130,7 @@ function butlerSheet(raw) {
         `${p.name}库存更新为 ${after} ${p.unit}`,
         p.supply && after >= p.supply.min ? '首页的库存不足提醒会消失' : '库存仍低于提醒水位，提醒会保留',
         `账单新增一笔 ${yuan(p.amount)} 的公共支出，每人 ${yuan(per)}`,
-        'House 动态增加一条记录'
+        '家里动态增加一条记录'
       ])}
       ${acts('doBuy', '确认并执行')}`);
     return;
@@ -152,7 +152,7 @@ function butlerSheet(raw) {
         `值日：期间你的 ${affected.length} 项任务会暂缓，后续轮换补偿`,
         '公共采购：这段时间不会分配采购任务给你',
         `费用：月末水电可按实际居住天数计算，你的居住天数为 ${30 - p.days} 天`,
-        'House 状态和头像会显示为离家中'
+        '家里的状态和头像会显示为离家中'
       ])}
       ${acts('doAway', '确认离家')}`);
     return;
@@ -166,14 +166,14 @@ function butlerSheet(raw) {
    ============================================================ */
 const QUIZ = [
   { k:'sleep',    q:'工作日一般几点睡？',            h:'知道彼此的作息，很多噪音问题就不会发生。', o:['23:00 左右','23:45 左右','00:30 左右','更晚'] },
-  { k:'quiet',    q:'几点之后希望家里保持安静？',      h:'这一条最容易形成明确规则。',            o:['22:30','23:00','23:30','00:00'] },
+  { k:'quiet',    q:'几点之后希望家里保持安静？',      h:'这一条最容易形成明确约定。',            o:['22:30','23:00','23:30','00:00'] },
   { k:'visitor',  q:'朋友来家里坐坐，你的接受程度？',  h:'先说清楚，来客人时才不会互相猜。',        o:['都可以，不用特意说','提前说一声','尽量约在外面'] },
   { k:'overnight',q:'同一个朋友一周留宿几晚比较合适？', h:'留宿是合租里最常见的摩擦来源。',          o:['尽量不留宿','每周 ≤1 晚','每周 ≤2 晚','不限'] },
   { k:'kitchen',  q:'厨房用完，什么程度算恢复？',      h:'把"干净"写成具体标准，比互相提醒有用。',   o:['台面擦净，锅具当天洗','大致收一下就行','第二天一起收拾'] },
   { k:'supply',   q:'公共用品你更偏好哪种方式？',      h:'决定要不要建立统一采购和 AA。',          o:['统一采购 AA','各买各的','谁用得多谁买'] },
   { k:'temp',     q:'公共空间空调多少度比较舒服？',    h:'温度差异不大，但夏天最容易积累情绪。',     o:['24°C','25°C','26°C','27°C'] },
   { k:'social',   q:'你希望的室友关系是？',           h:'没有对错，说清楚就好。',                o:['礼貌互不打扰','偶尔一起聊天吃饭','希望成为朋友'] },
-  { k:'conflict', q:'如果室友的行为影响到你，你更希望？', h:'这决定了管家以后用什么方式提醒。',       o:['私下直接说','系统先中立提醒','House 一起讨论'] },
+  { k:'conflict', q:'如果室友的行为影响到你，你更希望？', h:'这决定了管家以后用什么方式提醒。',       o:['私下直接说','系统先中立提醒','家里一起讨论'] },
   { k:'smoke',    q:'家里能否吸烟？',                 h:'包括阳台。',                          o:['家里都不吸','阳台可以','都可以'] },
   { k:'cook',     q:'你的做饭频率大概是？',           h:'和厨房清洁、油烟、冰箱分区都有关。',      o:['几乎不做饭','偶尔做饭','经常做饭'] },
   { k:'pet',      q:'关于宠物，你的情况是？',         h:'提前说明，避免入住后才发现不合适。',      o:['不养，也不希望有','不养，可以接受','我有宠物'] }
@@ -210,7 +210,7 @@ const AWK_CATS = [
 ];
 /* 每类问题背后，通常真正涉及的几个点 */
 const AWK_FOCUS = {
-  访客: ['留宿频率', '公共空间占用', '实际居住人数', '水电公平'],
+  访客: ['留宿频率', '公共空间占用', '实际居住人数', '费用公平'],
   卫生: ['清洁标准不一致', '恢复时限', '公共区域责任划分'],
   噪音: ['安静时间', '外放与耳机', '洗衣与家务时段'],
   钱:   ['分摊方式', '结算周期', '谁垫付'],
@@ -218,6 +218,50 @@ const AWK_FOCUS = {
   物品: ['借用方式', '公共消耗品补充', '损坏赔偿'],
   其他: ['需要建立新的约定']
 };
+
+/* 语义识别优先于用户先前选的分类。
+   有人心里想的是访客问题，却顺手点了"卫生"，按分类走会把整条链路带偏。 */
+const AWK_SIGNALS = [
+  { cat:'访客', kws:['女朋友','男朋友','对象','访客','留宿','过夜','住这','来住','住下','天天来','经常来','带人','带朋友','朋友来','另一个人','多住'] },
+  { cat:'噪音', kws:['吵','噪音','外放','大声','睡不着','动静','响','打游戏','说话声','半夜'] },
+  { cat:'卫生', kws:['脏','乱','油污','不洗','不收拾','碗','台面','厨余','垃圾没','头发','打扫','发霉','异味'] },
+  { cat:'钱',   kws:['分摊','平摊','AA','垫付','转账','结算','水电费','费用','付钱','算钱','贵'] },
+  { cat:'空间', kws:['占了','堆','放我','塞满','冰箱','柜子','鞋柜','阳台','位置','地方','我的区域'] },
+  { cat:'物品', kws:['用我','拿我','借','弄坏','坏了','用完了','没经过我','动我'] }
+];
+function detectCat(text) {
+  let best = null, bestScore = 0;
+  AWK_SIGNALS.forEach(s => {
+    const score = s.kws.filter(k => text.includes(k)).length;
+    if (score > bestScore) { best = s.cat; bestScore = score; }
+  });
+  return bestScore > 0 ? best : null;
+}
+
+/* 每个诉求对应哪条现有规则。有规则就先判断是否超出，而不是再造一条。 */
+const FOCUS_RULE = {
+  '留宿频率': 'overnight', '实际居住人数': 'overnight',
+  '清洁标准不一致': 'kitchen', '恢复时限': 'kitchen',
+  '安静时间': 'quiet', '公共消耗品补充': 'supply', '费用公平': null
+};
+function ruleFor(focus) {
+  const key = FOCUS_RULE[focus];
+  return key ? S.rules.find(r => r.prefKey === key) : null;
+}
+/* 现状与规则的差距。只描述事实，不指向任何人。 */
+function gapFor(focus) {
+  if (FOCUS_RULE[focus] === 'overnight') {
+    const o = overnightRule();
+    if (!o) return null;
+    return { exceeded: o.exceeded, limit: o.limit, actual: o.actual,
+      text: o.exceeded
+        ? `本周同一访客已登记留宿 ${o.actual} 晚，约定是每周最多 ${o.limit} 晚，已超出 ${o.actual - o.limit} 晚。`
+        : `本周同一访客已登记留宿 ${o.actual} 晚，仍在每周 ${o.limit} 晚的约定范围内。` };
+  }
+  const it = S.issues.find(i => S.rules.find(r => r.id === i.rule && r.prefKey === FOCUS_RULE[focus]));
+  if (it) return { exceeded: true, text: `${it.window}，这条约定出现了 ${it.count} 次提醒。` };
+  return null;
+}
 const AWK_SUGGEST = {
   '留宿频率': '同一访客每周最多留宿 2 晚，更多次数提前征求其他室友意见。',
   '实际居住人数': '长期多住一人时，水电按实际居住人数分摊。',
@@ -227,7 +271,7 @@ const AWK_SUGGEST = {
   '恢复时限': '公共区域使用后当天恢复，不留到第二天。',
   '安静时间': '23:30 后保持安静，外放改用耳机。',
   '分摊方式': '公共费用默认平均分摊，出现长期离家时可改按居住天数。',
-  '分区边界': '冰箱、储物柜、置物架和鞋柜按现有分区使用，需要调整先在 House 里说一声。',
+  '分区边界': '冰箱、储物柜、置物架和鞋柜按现有分区使用，需要调整先在家里说一声。',
   '借用方式': '可借物品按主人写下的方式使用，用后归位。'
 };
 
@@ -259,79 +303,114 @@ function awkwardSheet() {
     <div class="acts"><button class="btn" data-act="awkBack">上一步</button>
       <button class="btn pri" data-act="awkAnalyze">让管家看看</button></div>`);
 
-  /* 第三步：识别真正涉及什么 */
+  /* 第三步：识别真正涉及什么。以描述内容为准，不以先前选的分类为准。 */
   if (a.step === 2) {
-    const focuses = AWK_FOCUS[a.cat] || AWK_FOCUS['其他'];
+    const readCat = a.readCat || a.cat;
+    const shifted = a.readCat && a.readCat !== a.cat;
+    const focuses = AWK_FOCUS[readCat] || AWK_FOCUS['其他'];
     return openSheet(`
       <h3>管家的理解</h3>
       <p class="hint">你说的这件事，通常不只是一个问题。先确认你最想解决的是哪一个。</p>
       ${understandBox('你描述的情况', [
-        uline('类型', a.cat),
+        uline('看起来是', `${readCat}相关`),
         `<div class="uline"><span class="ul">原话</span><span class="uv" style="font-weight:400;font-family:var(--f-b);text-align:right">${a.text}</span></div>`
       ])}
-      <div style="font-size:13px;color:var(--ink-2);margin-bottom:9px">这件事可能涉及：</div>
+      ${shifted ? `<div class="notice" style="margin-bottom:14px">${svg(I.info)}<span>
+        你一开始选的是「${a.cat}」，但从你的描述看，这件事更接近「${readCat}」。管家以你写的内容为准，选错分类不影响后面的判断。</span></div>` : ''}
+      <div style="font-size:13px;color:var(--ink-2);margin-bottom:9px">这件事可能同时涉及：</div>
       <div class="vals" style="margin-bottom:16px">${focuses.map(f => `<span class="val" style="padding-left:10px">${f}</span>`).join('')}</div>
-      <div style="font-size:13.5px;font-weight:600;margin-bottom:9px">你最希望解决什么？</div>
-      <div class="opts">${focuses.map(f => `
-        <button class="opt" data-act="awkFocus" data-k="${f}">${f}<span class="ok">${svg(I.check, 2.4)}</span></button>`).join('')}</div>
+      <div style="font-size:13.5px;font-weight:600;margin-bottom:9px">你最希望先解决哪一个？</div>
+      <div class="opts">${focuses.map(f => {
+        const r = ruleFor(f);
+        return `<button class="opt" data-act="awkFocus" data-k="${f}">
+          <span>${f}${r ? `<span style="display:block;font-size:12px;color:var(--ink-3);font-weight:400">已有相关约定</span>` : ''}</span>
+          <span class="ok">${svg(I.check, 2.4)}</span></button>`;
+      }).join('')}</div>
       <div class="acts"><button class="btn" data-act="awkBack">上一步</button></div>`);
   }
 
-  /* 第四 + 五步：现有规则 + 三个方向 */
+  /* 第四步：先看现有约定，再决定怎么处理。
+     已经有约定的，优先按约定提醒，而不是重复造一条新规则。 */
   if (a.step === 3) {
-    const existing = S.rules.find(r =>
-      r.title.includes(a.focus.slice(0, 2)) || (a.focus === '留宿频率' && r.id === 'r2'));
+    const existing = ruleFor(a.focus);
+    const gap = gapFor(a.focus);
     const sug = AWK_SUGGEST[a.focus] || '把这件事写成一条大家都认可的具体约定。';
+    const opt = (w, title, desc, rec) => `
+      <button class="opt" data-act="awkGo" data-w="${w}">
+        <span><b style="font-family:var(--f-d)">${title}${rec ? '　<span class="pill ok">推荐</span>' : ''}</b>
+        <span style="display:block;font-size:12.5px;color:var(--ink-3);font-weight:400">${desc}</span></span>
+        <span class="ok">${svg(I.check, 2.4)}</span></button>`;
+
     return openSheet(`
       <h3>${a.focus}</h3>
-      <p class="hint">先看 House 现在有没有相关约定，再决定怎么处理。</p>
-      ${existing
-        ? `<div class="card pad" style="box-shadow:none;margin-bottom:14px">
-            <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin-bottom:4px">House 现有规则</div>
-            <b style="font-family:var(--f-d);font-size:15px">${existing.title}</b>
-            <p style="font-size:13px;color:var(--ink-2);margin-top:3px">${existing.desc}</p>
-            <p style="font-size:12.5px;color:var(--ink-3);margin-top:7px">规则存在，但最近的实际情况和它有出入。这通常说明标准需要更具体，而不是有人故意不遵守。</p>
-          </div>`
-        : `<div class="notice" style="margin-bottom:14px">${svg(I.info)}<span>当前 House 还没有关于「${a.focus}」的明确约定。很多摩擦其实来自这里——没人说错话，只是从来没说清楚。</span></div>`}
+      <p class="hint">先看家里现在有没有相关约定，再决定怎么处理。</p>
+      ${existing ? `
+        <div class="rulebox">
+          <div class="rl">已有的共同约定</div>
+          <b>${existing.title}</b>
+          <p>${existing.desc}</p>
+          <div class="gap ${gap && gap.exceeded ? 'over' : 'ok'}">
+            ${svg(gap && gap.exceeded ? I.info : I.check)}
+            <span>${gap ? gap.text : '目前没有记录到与这条约定的明显出入。'}</span></div>
+        </div>
+        ${gap && gap.exceeded ? `<div class="notice" style="margin-bottom:14px">${svg(I.info)}<span>
+          这件事已经有约定了，所以不需要再定一条新规则。先按现有约定提醒，如果大家觉得约定本身需要改，再重新确认。</span></div>` : ''}`
+      : `<div class="notice" style="margin-bottom:14px">${svg(I.info)}<span>
+          家里还没有关于「${a.focus}」的明确约定。很多摩擦其实来自这里——没人说错话，只是从来没说清楚。</span></div>`}
+
       <div style="font-size:13.5px;font-weight:600;margin-bottom:9px">你希望怎么处理</div>
       <div class="opts">
-        <button class="opt" data-act="awkGo" data-w="private">
-          <span><b style="font-family:var(--f-d)">私下聊聊</b>
-          <span style="display:block;font-size:12.5px;color:var(--ink-3);font-weight:400">管家帮你把话整理得更中性，只发给相关的人</span></span></button>
-        <button class="opt" data-act="awkGo" data-w="house">
-          <span><b style="font-family:var(--f-d)">House 讨论</b>
-          <span style="display:block;font-size:12.5px;color:var(--ink-3);font-weight:400">不点名，把问题本身放到 House 里一起说</span></span></button>
-        <button class="opt" data-act="awkGo" data-w="rule" aria-pressed="true">
-          <span><b style="font-family:var(--f-d)">建立规则　<span class="pill ok">推荐</span></b>
-          <span style="display:block;font-size:12.5px;color:var(--ink-3);font-weight:400">${sug}</span></span></button>
+        ${existing && gap && gap.exceeded
+          ? opt('remind', '按现有约定提醒', '管家发一条不指向任何人的提醒，只说明约定和当前情况', true) +
+            opt('clarify', '重新确认这条约定', '如果觉得每周 ' + (gap.limit || '') + ' 晚这个数字本身需要调整', false)
+          : existing
+            ? opt('clarify', '重新确认这条约定', '把标准写得更具体，减少理解上的差异', true)
+            : opt('rule', '建立约定', sug, true)}
+        ${opt('private', '私下聊聊', '管家帮你把话整理得更中性，只发给相关的人', false)}
+        ${opt('house', '放到家里一起讨论', '不点名，把问题本身提出来', false)}
       </div>
       <div class="acts"><button class="btn" data-act="awkBack">上一步</button></div>`);
   }
 
-  /* 确认发起 */
+  /* 第五步：确认。不同处理方式产生的结果完全不同，先说清楚再执行。 */
   if (a.step === 4) {
     const sug = AWK_SUGGEST[a.focus] || '把这件事写成一条大家都认可的具体约定。';
-    const WAY = { private:'私下聊聊', house:'House 讨论', rule:'建立规则' };
+    const existing = ruleFor(a.focus);
+    const gap = gapFor(a.focus);
+    const WAY = { private:'私下聊聊', house:'一起讨论', rule:'建立约定', remind:'按现有约定提醒', clarify:'重新确认这条约定' };
+    const draft = existing
+      ? `想和你对一下访客留宿的安排。我们之前说好的是同一访客每周最多留宿 ${gap ? gap.limit : 2} 晚，这周好像到 ${gap ? gap.actual : 3} 晚了。我不是要计较这个，就是想问问你最近是不是有什么特殊情况，需要的话我们把这条重新定一下也可以。`
+      : `想和你聊一下${a.focus}这件事。我们家里目前没有相关的约定，我想问问你的想法，看能不能定一个大家都舒服的方式。`;
+
+    const impact = {
+      remind: ['管家发出一条中立提醒，说明约定内容和当前情况', '提醒不指向任何人，也不会显示是谁触发的',
+               '不新增规则——这件事已经有约定了', '这次提醒会记入居住问题记录的第 1 级'],
+      clarify: [`「${existing ? existing.title : a.focus}」进入重新确认`, '可以把标准或数字改得更具体',
+                '不新增规则，只修改现有这一条', '需要全员确认后才会更新'],
+      rule: ['「正在讨论」中新增一个议题', '其他人看到的是议题本身，不会看到是谁提的', '全员同意后成为共同约定'],
+      house: ['「正在讨论」中新增一个议题', '不点名，其他人看到的是问题本身', '达成一致后可以转成约定'],
+      private: ['这段话只发给相关的人', '家里动态中不会出现任何记录', '如果之后仍有问题，可以再放到一起讨论']
+    };
+
     return openSheet(`
       <h3>${WAY[a.way]}</h3>
       <p class="hint">${a.way === 'private'
-        ? '下面这段话已经去掉了情绪和指责，只描述事实和你的诉求。发出前你可以再改。'
-        : '发起后，其他室友会看到这个议题本身，不会看到你原本说的那段话，也不会显示是谁提的。'}</p>
+        ? '下面这段话去掉了情绪和指责，只说事实和你的想法。发出前你可以再改。'
+        : '确认之前，先看清楚这一步会产生什么。'}</p>
       ${a.way === 'private'
-        ? `<div class="fld"><label>整理后的表达</label><textarea id="awkFinal">最近想和你确认一下访客留宿的安排。House 现在的约定是同一访客每周最多留宿 2 晚，最近的频率好像超过了一些。你看我们要不要一起把这条重新定一下？</textarea></div>`
-        : `${understandBox('将发起的议题', [
-            uline('议题', a.focus),
-            uline('类型', a.cat),
-            uline('发起方式', WAY[a.way]),
+        ? `<div class="fld"><label>整理后的表达</label><textarea id="awkFinal">${draft}</textarea></div>`
+        : understandBox('将要做的事', [
+            uline('针对', a.focus),
+            existing ? uline('对应约定', existing.title) : uline('现有约定', '暂无'),
+            gap ? uline('当前情况', `<span style="font-weight:400;font-family:var(--f-b);text-align:right">${gap.text}</span>`) : '',
+            uline('处理方式', WAY[a.way]),
             uline('署名', '不显示发起人')
-          ])}
-          ${a.way === 'rule' ? `<div class="suggest" style="margin-bottom:14px"><div class="sl">建议规则</div><p>${sug}</p></div>` : ''}`}
-      ${impactBox(a.way === 'private'
-        ? ['这段话只会发给相关的人', 'House 里不会出现任何记录', '如果之后仍有问题，可以再升级为 House 讨论']
-        : ['「正在讨论」中新增一个议题', '其他室友会收到中立的提醒，不会看到是谁提的',
-           a.way === 'rule' ? '全员同意后自动成为 House 规则' : '讨论达成一致后可以转为规则'])}
+          ].filter(Boolean))}
+      ${a.way === 'rule' ? `<div class="suggest" style="margin-bottom:14px"><div class="sl">建议的约定</div><p>${sug}</p></div>` : ''}
+      ${impactBox(impact[a.way])}
       <div class="acts"><button class="btn" data-act="awkBack">上一步</button>
-        <button class="btn pri" data-act="awkSubmit">${a.way === 'private' ? '发送' : '发起讨论'}</button></div>`);
+        <button class="btn pri" data-act="awkSubmit">${
+          a.way === 'private' ? '发送' : a.way === 'remind' ? '发出提醒' : a.way === 'clarify' ? '发起重新确认' : '发起讨论'}</button></div>`);
   }
 }
 
@@ -351,7 +430,7 @@ function safetySheet() {
         <button class="safeact" data-act="safeAct" data-k="police">${svg(I.alert)}求助与报警指引<span class="ar">${svg(I.chev)}</span></button>
       </div>
       <p style="font-size:12px;color:var(--ink-3);margin-top:13px">
-        记录只保存在你自己这里，其他室友看不到，也不会出现在 House 动态中。</p>
+        记录只保存在你自己这里，其他室友看不到，也不会出现在 家里动态中。</p>
     </div>
     <div class="acts"><button class="btn" data-act="close">返回</button></div>`);
 }
@@ -426,7 +505,7 @@ function billSheet() {
 function visitSheet(presetOvernight) {
   const rule = S.rules.find(r => r.id === 'r2');
   openSheet(`<h3>登记一位访客</h3>
-    <p class="hint">普通到访只需要告知。留宿会对照 House 当前的约定，超过约定不会被禁止，只是先问问大家。</p>
+    <p class="hint">普通到访只需要告知。留宿会对照 现在的约定，超过约定不会被禁止，只是先问问大家。</p>
     <div class="fld"><label for="vg">访客称呼</label><input type="text" id="vg" value="朋友"></div>
     <div class="fld"><label for="vw">时间</label><input type="text" id="vw" value="今晚 19:00–22:00"></div>
     <div class="fld"><label>是否留宿</label><div class="who-pick" id="vo">
@@ -442,7 +521,7 @@ function visitSheet(presetOvernight) {
       : n <= 2 ? `
       <div class="notice" style="background:var(--jade-soft);color:var(--jade-ink)">${svg(I.check)}<span>
         这是本周第 ${n} 晚，符合当前约定：${rule.title}。</span></div>`
-      : `<div class="fair"><div class="fh">${svg(I.info)}本次将超过 House 当前约定</div>
+      : `<div class="fair"><div class="fh">${svg(I.info)}本次将超过 现在的约定</div>
         <p>这是本周第 ${n} 晚，当前约定是每周最多 2 晚。这不会被禁止，但建议先征求其他室友的意见。</p></div>`;
   };
   upd();
@@ -459,7 +538,7 @@ function awaySheet() {
     <div class="fld"><label for="at">结束</label><input type="text" id="at" value="9月20日"></div>
     <div class="fld"><label for="ad">天数</label><input type="number" id="ad" value="5" min="1"></div>
     ${impactBox(['期间你的值日任务会暂缓，后续轮换补偿', '这段时间不会分配公共采购任务给你',
-                 '月末水电可按实际居住天数计算', 'House 状态显示为离家中'])}
+                 '月末水电可按实际居住天数计算', '家里的状态显示为离家中'])}
     ${acts('doAway2', '确认离家')}`);
 }
 
@@ -489,11 +568,11 @@ function stewardSheet() {
   openSheet(`<h3>管家协调摘要</h3>
     <p class="hint">这份摘要只描述规则和现状之间的差距，不评价任何人。提交前你可以看到全部内容。</p>
     ${understandBox('将提交给 ' + HOUSE.steward, [
-      uline('House', HOUSE.name),
+      uline('住所', HOUSE.name),
       uline('当前问题', it ? it.title : '—'),
-      uline('对应规则', rule ? rule.title : '暂无相关规则'),
+      uline('对应约定', rule ? rule.title : '暂无相关约定'),
       uline('最近情况', it ? `${it.window}出现 ${it.count} 次提醒` : '—'),
-      uline('已尝试', '系统中立提醒 → 重新明确规则'),
+      uline('已尝试', '系统中立提醒 → 重新明确约定'),
       uline('当前诉求', '希望协助组织一次标准确认')
     ])}
     <div class="notice" style="margin-bottom:14px">${svg(I.info)}<span>摘要中不包含任何成员的姓名和具体行为描述。</span></div>
@@ -509,7 +588,7 @@ function clarifySheet(id) {
       ${['台面无明显油污', '厨余当天处理', '锅具当天清洗', '水槽不留过夜碗碟'].map(x => `
         <button class="opt" data-act="clarifyPick" aria-pressed="true">${x}<span class="ok">${svg(I.check, 2.4)}</span></button>`).join('')}
     </div>
-    ${impactBox(['这条规则的描述会更新为选中的具体标准', '「正在讨论」中新增一个议题，等待全员确认',
+    ${impactBox(['这条约定的描述会更新为选中的具体标准', '「正在讨论」中新增一个议题，等待全员确认',
                  '问题记录回到第 1 级，重新从中立提醒开始'])}
     ${acts('doClarify', '发起重新确认')}`);
   sheetEl().dataset.iid = id;
