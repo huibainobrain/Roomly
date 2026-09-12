@@ -1,0 +1,690 @@
+<title>合租生活管家</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#F7F6F2; --surface:#FFFFFF; --surface-2:#F1F0EA;
+  --ink:#1C211E; --ink-2:#4E5953; --ink-3:#8A938D;
+  --line:#E4E2DA; --line-2:#D3D1C7;
+  --jade:#276E56; --jade-ink:#1E5A46; --jade-soft:#E1EFE8; --jade-line:#B9D9C9;
+  --amber:#A8621A; --amber-soft:#FAEBD9; --amber-line:#EBCFA8;
+  --clay:#B04A35; --clay-soft:#FAE5E0;
+  --shadow:0 1px 2px rgba(28,33,30,.05), 0 8px 20px -12px rgba(28,33,30,.18);
+  --r:16px; --r-sm:10px;
+  --f-d:"Outfit","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --f-b:"Instrument Sans","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ground:#141715; --surface:#1C201D; --surface-2:#242925;
+  --ink:#EDEFEB; --ink-2:#AFB8B2; --ink-3:#7C857F;
+  --line:#2D332E; --line-2:#3A413B;
+  --jade:#6DC49F; --jade-ink:#8FD8B7; --jade-soft:#1B2E26; --jade-line:#2E4C3E;
+  --amber:#DFA766; --amber-soft:#2E2418; --amber-line:#4A3A23;
+  --clay:#E08872; --clay-soft:#331F1A;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 20px -12px rgba(0,0,0,.6);
+}}
+:root[data-theme="dark"]{
+  --ground:#141715; --surface:#1C201D; --surface-2:#242925;
+  --ink:#EDEFEB; --ink-2:#AFB8B2; --ink-3:#7C857F;
+  --line:#2D332E; --line-2:#3A413B;
+  --jade:#6DC49F; --jade-ink:#8FD8B7; --jade-soft:#1B2E26; --jade-line:#2E4C3E;
+  --amber:#DFA766; --amber-soft:#2E2418; --amber-line:#4A3A23;
+  --clay:#E08872; --clay-soft:#331F1A;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 20px -12px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--f-b);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4{font-family:var(--f-d);margin:0;text-wrap:balance;letter-spacing:-.01em}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--jade);outline-offset:2px;border-radius:6px}
+.num{font-family:var(--f-d);font-variant-numeric:tabular-nums}
+
+/* ---------- shell ---------- */
+.shell{display:flex;min-height:100vh}
+.rail{width:236px;flex:none;border-right:1px solid var(--line);background:var(--surface);padding:22px 16px;display:flex;flex-direction:column;gap:22px;position:sticky;top:0;height:100vh}
+.brand{display:flex;gap:10px;align-items:flex-start}
+.mark{width:34px;height:34px;flex:none;border-radius:11px;background:var(--jade);color:#fff;display:grid;place-items:center}
+.mark svg{width:19px;height:19px}
+.brand b{font-family:var(--f-d);font-size:16px;font-weight:600;display:block;line-height:1.3}
+.brand span{font-size:11.5px;color:var(--ink-3);letter-spacing:.04em}
+.flat{background:var(--surface-2);border-radius:12px;padding:11px 12px}
+.flat .fl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.flat .fn{font-family:var(--f-d);font-weight:600;font-size:14.5px;margin-top:1px}
+.faces{display:flex;gap:5px;margin-top:9px}
+.av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-family:var(--f-d);font-size:11px;font-weight:600;color:#fff;flex:none}
+.av.lg{width:32px;height:32px;font-size:13px}
+.av.me{box-shadow:0 0 0 2px var(--surface-2),0 0 0 3.5px var(--jade)}
+nav{display:flex;flex-direction:column;gap:2px}
+.nv{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:10px;border:0;background:none;width:100%;text-align:left;color:var(--ink-2);font-weight:500;font-size:14.5px}
+.nv svg{width:17px;height:17px;flex:none;opacity:.75}
+.nv:hover{background:var(--surface-2);color:var(--ink)}
+.nv[aria-current="page"]{background:var(--jade-soft);color:var(--jade-ink);font-weight:600}
+.nv[aria-current="page"] svg{opacity:1}
+.nv .dot{margin-left:auto;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--clay);color:#fff;font-size:10.5px;font-weight:700;display:grid;place-items:center;font-family:var(--f-d)}
+.railfoot{margin-top:auto;font-size:11.5px;color:var(--ink-3);border-top:1px solid var(--line);padding-top:12px}
+.railfoot button{background:none;border:0;color:var(--ink-3);padding:0;font-size:11.5px;text-decoration:underline;text-underline-offset:2px}
+main{flex:1;min-width:0}
+.wrap{max-width:940px;padding:30px 30px 60px;margin:0 auto}
+.topbar{display:none}
+.tabbar{display:none}
+
+/* ---------- page head ---------- */
+.phead{margin-bottom:20px}
+.phead h1{font-size:27px;font-weight:600}
+.phead p{margin:3px 0 0;color:var(--ink-2);font-size:14px}
+.sechead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:26px 0 11px}
+.sechead h2{font-size:13px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.sechead .sub{font-size:12.5px;color:var(--ink-3)}
+
+/* ---------- cards ---------- */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px}
+.todo{display:flex;gap:13px;padding:15px 16px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.todo .ic{width:34px;height:34px;border-radius:10px;flex:none;display:grid;place-items:center}
+.todo .ic svg{width:17px;height:17px}
+.todo .bd{flex:1;min-width:0}
+.todo .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+.todo .t{font-family:var(--f-d);font-size:16px;font-weight:600;margin-top:2px;line-height:1.35}
+.todo .m{font-size:13px;color:var(--ink-2);margin-top:2px}
+.todo .act{margin-top:10px}
+.todo.ok .ic{background:var(--jade-soft);color:var(--jade)}
+.todo.warn .ic{background:var(--amber-soft);color:var(--amber)}
+.todo.hot .ic{background:var(--clay-soft);color:var(--clay)}
+.todo.done{opacity:.62}
+.todo.done .t{text-decoration:line-through;text-decoration-color:var(--ink-3)}
+
+/* stat strip */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:var(--r);background:var(--surface);overflow:hidden;box-shadow:var(--shadow)}
+.stat{padding:14px 16px;border-right:1px solid var(--line)}
+.stat:last-child{border-right:0}
+.stat .sv{font-family:var(--f-d);font-size:23px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.2}
+.stat .sv small{font-size:13px;font-weight:500;color:var(--ink-3);margin-left:1px}
+.stat .sl{font-size:12px;color:var(--ink-3);margin-top:1px}
+.stat.alert .sv{color:var(--amber)}
+
+/* activity */
+.feed{list-style:none;margin:0;padding:0}
+.feed li{display:flex;gap:11px;align-items:baseline;padding:10px 0;border-bottom:1px solid var(--line)}
+.feed li:last-child{border-bottom:0}
+.feed .who{flex:none}
+.feed .tx{flex:1;font-size:14px;color:var(--ink-2)}
+.feed .tx b{color:var(--ink);font-weight:600}
+.feed .tm{font-size:11.5px;color:var(--ink-3);flex:none;font-variant-numeric:tabular-nums}
+
+/* ---------- pills & buttons ---------- */
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:20px;border:1px solid transparent;white-space:nowrap}
+.pill.wait{background:var(--amber-soft);color:var(--amber);border-color:var(--amber-line)}
+.pill.done{background:var(--jade-soft);color:var(--jade-ink);border-color:var(--jade-line)}
+.pill.low{background:var(--clay-soft);color:var(--clay)}
+.pill.plain{background:var(--surface-2);color:var(--ink-2);border-color:var(--line)}
+.btn{border:1px solid var(--line-2);background:var(--surface);border-radius:9px;padding:7px 13px;font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;gap:6px;transition:background .12s,border-color .12s}
+.btn:hover{background:var(--surface-2);border-color:var(--ink-3)}
+.btn.pri{background:var(--jade);border-color:var(--jade);color:#fff}
+.btn.pri:hover{background:var(--jade-ink);border-color:var(--jade-ink)}
+.btn.sm{padding:5px 10px;font-size:12.5px}
+.btn svg{width:14px;height:14px}
+.btn[disabled]{opacity:.5;pointer-events:none}
+.qty{display:inline-flex;align-items:center;border:1px solid var(--line-2);border-radius:9px;overflow:hidden;background:var(--surface)}
+.qty button{width:31px;height:30px;border:0;background:none;font-size:16px;line-height:1;color:var(--ink-2)}
+.qty button:hover{background:var(--surface-2);color:var(--ink)}
+.qty span{min-width:44px;text-align:center;font-family:var(--f-d);font-weight:600;font-size:14px;font-variant-numeric:tabular-nums;border-left:1px solid var(--line);border-right:1px solid var(--line);padding:4px 0}
+
+/* ---------- rows ---------- */
+.rows{display:flex;flex-direction:column}
+.row{display:flex;gap:14px;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row .main{flex:1;min-width:0}
+.row .ttl{font-family:var(--f-d);font-size:15.5px;font-weight:600;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.row .meta{font-size:12.5px;color:var(--ink-3);margin-top:2px}
+.row .right{text-align:right;flex:none}
+.row .amt{font-family:var(--f-d);font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
+.row .per{font-size:12px;color:var(--ink-3);margin-top:1px}
+.row .cta{flex:none}
+.split{display:flex;gap:4px;margin-top:7px;align-items:center;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:5px;background:var(--surface-2);border-radius:20px;padding:2px 9px 2px 2px;font-size:12px;color:var(--ink-2)}
+.chip .av{width:19px;height:19px;font-size:9px}
+
+/* supplies */
+.sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:12px}
+.sup{padding:15px 16px;display:flex;flex-direction:column;gap:11px}
+.sup .head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.sup .nm{font-family:var(--f-d);font-size:16px;font-weight:600}
+.sup .th{font-size:12px;color:var(--ink-3);margin-top:1px}
+.sup .bar{height:5px;border-radius:3px;background:var(--surface-2);overflow:hidden}
+.sup .bar i{display:block;height:100%;border-radius:3px;background:var(--jade);transform-origin:left center;transition:transform .3s}
+.sup.low .bar i{background:var(--clay)}
+.sup .foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:auto}
+.sup.low{border-color:var(--clay);box-shadow:var(--shadow),inset 3px 0 0 var(--clay)}
+
+/* rules */
+.rule{padding:16px;display:flex;flex-direction:column;gap:9px}
+.rule .rh{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.rule h3{font-size:16.5px;font-weight:600}
+.rule p{margin:0;color:var(--ink-2);font-size:14px;max-width:62ch}
+.rule .rf{display:flex;justify-content:space-between;align-items:center;gap:10px;border-top:1px solid var(--line);padding-top:10px;flex-wrap:wrap}
+.conf{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-3)}
+
+/* modal */
+.ov{position:fixed;inset:0;background:rgba(20,23,21,.45);backdrop-filter:blur(2px);display:grid;place-items:center;padding:18px;z-index:50}
+.ov[hidden]{display:none}
+.sheet{background:var(--surface);border:1px solid var(--line);border-radius:18px;width:100%;max-width:430px;padding:20px;box-shadow:0 24px 60px -20px rgba(0,0,0,.4);max-height:88vh;overflow-y:auto}
+.sheet h3{font-size:19px;font-weight:600}
+.sheet .hint{color:var(--ink-3);font-size:13px;margin:3px 0 16px}
+label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-2);margin-bottom:5px}
+.fld{margin-bottom:13px}
+input[type=text],input[type=number],input[type=date],select,textarea{width:100%;padding:9px 11px;border:1px solid var(--line-2);border-radius:9px;background:var(--ground);color:var(--ink);font:inherit;font-size:14.5px}
+textarea{resize:vertical;min-height:64px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--jade);outline-offset:-1px;border-color:var(--jade)}
+.who-pick{display:flex;gap:7px;flex-wrap:wrap}
+.who-pick button{border:1px solid var(--line-2);background:var(--ground);border-radius:20px;padding:4px 11px 4px 4px;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500}
+.who-pick button[aria-pressed="true"]{border-color:var(--jade);background:var(--jade-soft);color:var(--jade-ink);font-weight:600}
+.calc{background:var(--jade-soft);border:1px solid var(--jade-line);border-radius:11px;padding:10px 12px;font-size:13px;color:var(--jade-ink);display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.calc b{font-family:var(--f-d);font-size:17px}
+.sheet .acts{display:flex;gap:9px;justify-content:flex-end;margin-top:4px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:88px;background:var(--ink);color:var(--ground);padding:10px 17px;border-radius:22px;font-size:13.5px;font-weight:500;box-shadow:0 10px 30px -8px rgba(0,0,0,.5);z-index:60;max-width:86vw;text-align:center}
+.toast[hidden]{display:none}
+.empty{padding:26px;text-align:center;color:var(--ink-3);font-size:13.5px}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- mobile ---------- */
+@media (max-width:860px){
+  .rail{display:none}
+  .shell{flex-direction:column}
+  .topbar{display:flex;align-items:center;gap:10px;padding:11px 16px;background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+  .topbar .brand b{font-size:15px}
+  .topbar .faces{margin:0 0 0 auto}
+  .wrap{padding:18px 16px 96px}
+  .phead h1{font-size:23px}
+  .stats{grid-template-columns:1fr 1fr}
+  .stat:nth-child(2){border-right:0}
+  .stat:nth-child(-n+2){border-bottom:1px solid var(--line)}
+  .tabbar{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--line);padding:5px 4px calc(5px + env(safe-area-inset-bottom));z-index:30}
+  .tabbar button{border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 2px;font-size:10.5px;color:var(--ink-3);font-weight:500;position:relative}
+  .tabbar button svg{width:20px;height:20px}
+  .tabbar button[aria-current="page"]{color:var(--jade)}
+  .tabbar .dot{position:absolute;top:2px;right:calc(50% - 17px);min-width:15px;height:15px;border-radius:8px;background:var(--clay);color:#fff;font-size:9.5px;font-weight:700;display:grid;place-items:center;font-family:var(--f-d)}
+  .row{flex-wrap:wrap}
+  .row .cta{width:100%}
+  .row .cta .btn{width:100%;justify-content:center}
+  .toast{bottom:82px}
+}
+</style>
+
+<div class="shell">
+  <aside class="rail">
+    <div class="brand">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-5h5v5"/></svg></span>
+      <span><b>合租生活管家</b><span>SHARED FLAT OS</span></span>
+    </div>
+    <div class="flat">
+      <div class="fl">当前空间</div>
+      <div class="fn">Jurong West 503</div>
+      <div class="faces" id="railFaces"></div>
+    </div>
+    <nav id="nav"></nav>
+    <div class="railfoot">
+      当前身份 <b id="meName">Yiming</b><br>
+      <button data-act="reset">重置演示数据</button>
+    </div>
+  </aside>
+
+  <main>
+    <header class="topbar">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-5h5v5"/></svg></span>
+      <span class="brand"><span><b>合租生活管家</b><span>Jurong West 503</span></span></span>
+      <div class="faces" id="topFaces"></div>
+    </header>
+    <div class="wrap" id="view"></div>
+  </main>
+</div>
+<div class="tabbar" id="tabbar"></div>
+<div class="ov" id="ov" hidden><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const I = {
+  home:'<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-5h5v5"/>',
+  money:'<circle cx="12" cy="12" r="9"/><path d="M12 7v10M14.8 9.4C14.3 8.5 13.3 8 12 8c-1.6 0-2.6.8-2.6 1.9 0 2.7 5.4 1.4 5.4 4.2 0 1.2-1.1 2-2.8 2-1.4 0-2.4-.5-2.9-1.5"/>',
+  chore:'<path d="M9 3h6l1 5H8l1-5Z"/><path d="M12 8v5"/><path d="M6 21c0-4 2.7-8 6-8s6 4 6 8H6Z"/>',
+  box:'<path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="m3 8 9 5 9-5"/><path d="M12 13v8"/>',
+  rule:'<path d="M6 3h9l4 4v14H6V3Z"/><path d="M15 3v4h4"/><path d="M9.5 12.5 11 14l3.5-3.5"/><path d="M9 17.5h6"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>'
+};
+const svg = (p,w)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w||2}" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+
+const MEMBERS = [
+  {id:'yiming', name:'Yiming', short:'YM', c:'#276E56'},
+  {id:'alex',   name:'Alex',   short:'AX', c:'#A8621A'},
+  {id:'tom',    name:'Tom',    short:'TM', c:'#41628C'}
+];
+const ME = 'yiming';
+const mem = id => MEMBERS.find(m=>m.id===id) || {name:id, short:'?', c:'#888'};
+const av = (id,cls='') => `<span class="av ${cls} ${id===ME?'me':''}" style="background:${mem(id).c}" title="${mem(id).name}">${mem(id).short}</span>`;
+const money = n => 'S$' + (Math.round(n*100)%100===0 ? Math.round(n) : n.toFixed(2));
+
+const SEED = {
+  tab:'home',
+  expenses:[
+    {id:'e1', title:'电费', note:'8月账单 · SP Group', amount:120, payer:'yiming', people:['yiming','alex','tom'], date:'2026-09-05', settled:false},
+    {id:'e2', title:'水费', note:'8月账单', amount:60, payer:'tom', people:['yiming','alex','tom'], date:'2026-09-02', settled:true},
+    {id:'e3', title:'网络费', note:'M1 光纤 月费', amount:60, payer:'alex', people:['yiming','alex','tom'], date:'2026-09-01', settled:true},
+    {id:'e4', title:'清洁用品', note:'洗洁精 + 抹布', amount:18, payer:'tom', people:['yiming','alex','tom'], date:'2026-09-08', settled:false}
+  ],
+  chores:[
+    {id:'c1', task:'厨房清洁', who:'yiming', done:false, today:true},
+    {id:'c2', task:'厕所清洁', who:'alex',   done:true,  today:false},
+    {id:'c3', task:'拖地',     who:'tom',    done:false, today:false},
+    {id:'c4', task:'倒垃圾',   who:'yiming', done:true,  today:false},
+    {id:'c5', task:'阳台整理', who:'alex',   done:true,  today:false},
+    {id:'c6', task:'客厅吸尘', who:'tom',    done:true,  today:false}
+  ],
+  supplies:[
+    {id:'s1', name:'厕纸',   qty:2, min:3, unit:'卷', max:12},
+    {id:'s2', name:'垃圾袋', qty:5, min:3, unit:'个', max:20},
+    {id:'s3', name:'洗洁精', qty:1, min:2, unit:'瓶', max:4},
+    {id:'s4', name:'洗衣液', qty:3, min:1, unit:'瓶', max:4}
+  ],
+  rules:[
+    {id:'r1', title:'安静时间', cat:'噪音', body:'23:30 后尽量避免外放音乐和制造较大噪音，看剧请戴耳机。', by:['yiming','alex','tom']},
+    {id:'r2', title:'访客规则', cat:'访客', body:'访客过夜需要提前一天在群里告知其他室友，连续留宿不超过 3 晚。', by:['alex','tom']},
+    {id:'r3', title:'公共区域', cat:'清洁', body:'使用厨房后及时清洁台面和厨具，水槽不留过夜碗碟。', by:['yiming','alex','tom']}
+  ],
+  activity:[
+    {who:'tom',   text:'完成了值日「客厅吸尘」', t:'2小时前'},
+    {who:'alex',  text:'补充了垃圾袋 <b>+10 个</b>', t:'昨天'},
+    {who:'yiming',text:'新增了费用 <b>电费 S$120</b>', t:'9月5日'},
+    {who:'alex',  text:'确认了公约「访客规则」', t:'9月3日'}
+  ]
+};
+
+const KEY = 'hejia-v1';
+let S;
+try { S = JSON.parse(localStorage.getItem(KEY)) || structuredClone(SEED); }
+catch(e){ S = structuredClone(SEED); }
+if(!S.expenses) S = structuredClone(SEED);
+const save = () => { try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} };
+const log = (who, text) => { S.activity.unshift({who, text, t:'刚刚'}); S.activity = S.activity.slice(0,8); };
+
+/* ---------- derived ---------- */
+const per = e => e.amount / e.people.length;
+const unsettled = () => S.expenses.filter(e=>!e.settled);
+const monthTotal = () => S.expenses.reduce((a,e)=>a+e.amount,0);
+const myTask = () => S.chores.find(c=>c.who===ME && c.today) || S.chores.find(c=>c.who===ME && !c.done);
+const choresDone = () => S.chores.filter(c=>c.done).length;
+const lowSupplies = () => S.supplies.filter(s=>s.qty < s.min);
+const myDue = () => unsettled().filter(e=>e.people.includes(ME) && e.payer!==ME);
+const unconfirmed = () => S.rules.filter(r=>!r.by.includes(ME));
+const badge = t => t==='expense' ? unsettled().length : t==='supply' ? lowSupplies().length : t==='rule' ? unconfirmed().length : 0;
+
+const TABS = [
+  {id:'home', label:'首页', icon:I.home},
+  {id:'expense', label:'费用', icon:I.money},
+  {id:'chore', label:'值日', icon:I.chore},
+  {id:'supply', label:'物品', icon:I.box},
+  {id:'rule', label:'公约', icon:I.rule}
+];
+
+/* ---------- views ---------- */
+function vHome(){
+  const t = myTask();
+  const due = myDue();
+  const dueAmt = due.reduce((a,e)=>a+per(e),0);
+  const low = lowSupplies();
+  const un = unconfirmed();
+  const cards = [];
+
+  cards.push(t && !t.done
+    ? `<div class="todo warn"><span class="ic">${svg(I.chore)}</span><div class="bd">
+        <div class="k">值日任务</div><div class="t">今天轮到你：${t.task}</div>
+        <div class="m">状态：待完成 · 本周第 ${S.chores.indexOf(t)+1} 项</div>
+        <div class="act"><button class="btn pri sm" data-act="doneChore" data-id="${t.id}">${svg(I.check)}完成任务</button></div>
+      </div></div>`
+    : `<div class="todo ok done"><span class="ic">${svg(I.check)}</span><div class="bd">
+        <div class="k">值日任务</div><div class="t">今天的值日已完成</div>
+        <div class="m">本周你负责的任务都结清了，辛苦了</div>
+        <div class="act"><button class="btn sm" data-act="go" data-tab="chore">查看排班</button></div>
+      </div></div>`);
+
+  cards.push(due.length
+    ? `<div class="todo hot"><span class="ic">${svg(I.money)}</span><div class="bd">
+        <div class="k">费用提醒</div><div class="t">你有 ${due.length} 笔待结算</div>
+        <div class="m">应付 <b class="num">${money(dueAmt)}</b> · ${due.map(e=>e.title).join(' / ')}</div>
+        <div class="act"><button class="btn sm" data-act="go" data-tab="expense">查看账单</button></div>
+      </div></div>`
+    : `<div class="todo ok done"><span class="ic">${svg(I.check)}</span><div class="bd">
+        <div class="k">费用提醒</div><div class="t">没有待你结算的费用</div>
+        <div class="m">本月你和室友之间已经两清</div>
+        <div class="act"><button class="btn sm" data-act="go" data-tab="expense">查看账单</button></div>
+      </div></div>`);
+
+  cards.push(low.length
+    ? `<div class="todo hot"><span class="ic">${svg(I.box)}</span><div class="bd">
+        <div class="k">物品提醒</div><div class="t">${low[0].name}库存不足</div>
+        <div class="m">当前剩余 <b class="num">${low[0].qty} ${low[0].unit}</b>（低于 ${low[0].min} ${low[0].unit}）${low.length>1?` · 另有 ${low.length-1} 件待补充`:''}</div>
+        <div class="act"><button class="btn pri sm" data-act="restock" data-id="${low[0].id}">去补充</button></div>
+      </div></div>`
+    : `<div class="todo ok done"><span class="ic">${svg(I.check)}</span><div class="bd">
+        <div class="k">物品提醒</div><div class="t">公共物品库存充足</div>
+        <div class="m">4 件物品都在提醒阈值以上</div>
+        <div class="act"><button class="btn sm" data-act="go" data-tab="supply">查看库存</button></div>
+      </div></div>`);
+
+  cards.push(un.length
+    ? `<div class="todo warn"><span class="ic">${svg(I.rule)}</span><div class="bd">
+        <div class="k">公约提醒</div><div class="t">${un.length} 条公约待你确认</div>
+        <div class="m">「${un[0].title}」已有 ${un[0].by.length}/3 位室友确认</div>
+        <div class="act"><button class="btn pri sm" data-act="go" data-tab="rule">去确认</button></div>
+      </div></div>`
+    : `<div class="todo ok done"><span class="ic">${svg(I.check)}</span><div class="bd">
+        <div class="k">公约提醒</div><div class="t">全部公约均已确认</div>
+        <div class="m">3 条公约 3/3 生效中</div>
+        <div class="act"><button class="btn sm" data-act="go" data-tab="rule">查看公约</button></div>
+      </div></div>`);
+
+  return `
+  <div class="phead">
+    <h1>今天需要处理什么</h1>
+    <p>Jurong West 503 · 9 月 12 日 · 你是 ${mem(ME).name}</p>
+  </div>
+  <div class="grid2">${cards.join('')}</div>
+
+  <div class="sechead"><h2>本月概览</h2><span class="sub">9 月 1 日 — 9 月 12 日</span></div>
+  <div class="stats">
+    <div class="stat"><div class="sv">${money(monthTotal())}</div><div class="sl">本月公共支出</div></div>
+    <div class="stat${unsettled().length?' alert':''}"><div class="sv">${unsettled().length}<small> 笔</small></div><div class="sl">待结算费用</div></div>
+    <div class="stat"><div class="sv">${choresDone()}<small>/${S.chores.length}</small></div><div class="sl">本周值日完成</div></div>
+    <div class="stat${lowSupplies().length?' alert':''}"><div class="sv">${lowSupplies().length}<small> 件</small></div><div class="sl">低库存物品</div></div>
+  </div>
+
+  <div class="sechead"><h2>最近动态</h2></div>
+  <div class="card" style="padding:4px 16px">
+    <ul class="feed">${S.activity.map(a=>`<li><span class="who">${av(a.who)}</span><span class="tx"><b>${mem(a.who).name}</b> ${a.text}</span><span class="tm">${a.t}</span></li>`).join('')}</ul>
+  </div>`;
+}
+
+function vExpense(){
+  const rows = S.expenses.map(e=>`
+    <div class="row">
+      <div class="main">
+        <div class="ttl">${e.title}
+          <span class="pill ${e.settled?'done':'wait'}">${e.settled?'已结清':'待结算'}</span>
+        </div>
+        <div class="meta">${e.note ? e.note+' · ' : ''}${e.date} · ${mem(e.payer).name} 垫付</div>
+        <div class="split">${e.people.map(p=>`<span class="chip">${av(p)}${money(per(e))}</span>`).join('')}</div>
+      </div>
+      <div class="right">
+        <div class="amt">${money(e.amount)}</div>
+        <div class="per">每人 ${money(per(e))}</div>
+      </div>
+      <div class="cta">${e.settled
+        ? `<button class="btn sm" data-act="unsettle" data-id="${e.id}">撤销结清</button>`
+        : `<button class="btn sm pri" data-act="settle" data-id="${e.id}">${svg(I.check)}标记已结清</button>`}</div>
+    </div>`).join('');
+
+  const owed = myDue().reduce((a,e)=>a+per(e),0);
+  return `
+  <div class="phead"><h1>费用</h1><p>所有公共支出按参与人平均分摊，谁垫付、谁该还，一目了然。</p></div>
+  <div class="stats" style="margin-bottom:16px">
+    <div class="stat"><div class="sv">${money(monthTotal())}</div><div class="sl">本月合计</div></div>
+    <div class="stat"><div class="sv">${money(monthTotal()/3)}</div><div class="sl">人均承担</div></div>
+    <div class="stat${unsettled().length?' alert':''}"><div class="sv">${unsettled().length}<small> 笔</small></div><div class="sl">待结算</div></div>
+    <div class="stat${owed?' alert':''}"><div class="sv">${money(owed)}</div><div class="sl">你还需付</div></div>
+  </div>
+  <div class="sechead"><h2>费用记录</h2>
+    <button class="btn pri sm" data-act="newExpense">${svg(I.plus)}新增费用</button>
+  </div>
+  <div class="card rows">${rows || '<div class="empty">还没有费用记录</div>'}</div>`;
+}
+
+function vChore(){
+  const rows = S.chores.map(c=>`
+    <div class="row">
+      <div class="main">
+        <div class="ttl">${c.task}
+          <span class="pill ${c.done?'done':'wait'}">${c.done?'已完成':'待完成'}</span>
+          ${c.today && !c.done ? '<span class="pill plain">今天</span>' : ''}
+        </div>
+        <div class="meta">负责人 ${mem(c.who).name}${c.who===ME?'（你）':''}</div>
+      </div>
+      <div class="right">${av(c.who,'lg')}</div>
+      <div class="cta">${c.done
+        ? `<button class="btn sm" data-act="undoChore" data-id="${c.id}">撤销</button>`
+        : `<button class="btn sm ${c.who===ME?'pri':''}" data-act="doneChore" data-id="${c.id}">${svg(I.check)}完成任务</button>`}</div>
+    </div>`).join('');
+
+  const next = S.chores.map(c=>{
+    const i = MEMBERS.findIndex(m=>m.id===c.who);
+    return {task:c.task, who:MEMBERS[(i+1)%MEMBERS.length].id};
+  });
+
+  return `
+  <div class="phead"><h1>值日</h1><p>本周责任到人，完成后立刻同步到首页和动态，不用谁开口催。</p></div>
+  <div class="sechead"><h2>本周值日</h2><span class="sub">已完成 ${choresDone()} / ${S.chores.length}</span></div>
+  <div class="card rows">${rows}</div>
+  <div class="sechead"><h2>下周排班</h2><span class="sub">按 Yiming → Alex → Tom 顺序轮换</span></div>
+  <div class="card rows">${next.map(n=>`
+    <div class="row"><div class="main"><div class="ttl">${n.task}</div>
+    <div class="meta">负责人 ${mem(n.who).name}${n.who===ME?'（你）':''}</div></div>
+    <div class="right">${av(n.who,'lg')}</div></div>`).join('')}</div>`;
+}
+
+function vSupply(){
+  const cards = S.supplies.map(s=>{
+    const low = s.qty < s.min;
+    const pct = Math.max(6, Math.min(100, Math.round(s.qty/s.max*100)));
+    return `<div class="card sup ${low?'low':''}">
+      <div class="head">
+        <div><div class="nm">${s.name}</div><div class="th">提醒阈值 ${s.min} ${s.unit}</div></div>
+        <span class="pill ${low?'low':'done'}">${low?'库存不足':(s.qty<=s.min?'即将用完':'充足')}</span>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">
+          <span class="num" style="font-size:22px;font-weight:600">${s.qty}<span style="font-size:13px;color:var(--ink-3);margin-left:2px">${s.unit}</span></span>
+        </div>
+        <div class="bar"><i style="width:100%;transform:scaleX(${pct/100})"></i></div>
+      </div>
+      <div class="foot">
+        <span class="qty">
+          <button data-act="dec" data-id="${s.id}" aria-label="减少${s.name}">−</button>
+          <span>${s.qty}</span>
+          <button data-act="inc" data-id="${s.id}" aria-label="增加${s.name}">+</button>
+        </span>
+        <button class="btn sm ${low?'pri':''}" data-act="restock" data-id="${s.id}">补充库存</button>
+      </div>
+    </div>`;
+  }).join('');
+  return `
+  <div class="phead"><h1>公共物品</h1><p>谁买的、买了多少、花了多少钱——补充库存会自动生成一笔 AA 费用。</p></div>
+  <div class="sgrid">${cards}</div>`;
+}
+
+function vRule(){
+  const cards = S.rules.map(r=>{
+    const ok = r.by.length === MEMBERS.length;
+    const mine = r.by.includes(ME);
+    return `<div class="card rule">
+      <div class="rh">
+        <div><h3>${r.title}</h3></div>
+        <span class="pill ${ok?'done':'wait'}">${ok?'已生效':'待确认'}</span>
+      </div>
+      <p>${r.body}</p>
+      <div class="rf">
+        <span class="conf">${MEMBERS.map(m=>r.by.includes(m.id)?av(m.id):`<span class="av" style="background:var(--surface-2);color:var(--ink-3)" title="${m.name} 未确认">${m.short}</span>`).join('')}
+          <span style="margin-left:3px">${r.by.length}/${MEMBERS.length} 已确认 · ${r.cat}</span></span>
+        ${mine
+          ? '<span class="pill done">你已确认</span>'
+          : `<button class="btn pri sm" data-act="confirm" data-id="${r.id}">${svg(I.check)}确认公约</button>`}
+      </div>
+    </div>`;
+  }).join('');
+  return `
+  <div class="phead"><h1>室友公约</h1><p>把口头约定变成写下来的规则，三人全部确认后才算生效。</p></div>
+  <div class="sechead"><h2>生效中的公约</h2>
+    <button class="btn sm" data-act="newRule">${svg(I.plus)}新增公约</button>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:12px">${cards}</div>`;
+}
+
+const VIEWS = {home:vHome, expense:vExpense, chore:vChore, supply:vSupply, rule:vRule};
+
+/* ---------- render ---------- */
+function render(){
+  document.getElementById('view').innerHTML = VIEWS[S.tab]();
+  document.getElementById('nav').innerHTML = TABS.map(t=>{
+    const b = badge(t.id);
+    return `<button class="nv" data-act="go" data-tab="${t.id}" ${S.tab===t.id?'aria-current="page"':''}>${svg(t.icon)}${t.label}${b?`<span class="dot">${b}</span>`:''}</button>`;
+  }).join('');
+  document.getElementById('tabbar').innerHTML = TABS.map(t=>{
+    const b = badge(t.id);
+    return `<button data-act="go" data-tab="${t.id}" ${S.tab===t.id?'aria-current="page"':''}>${svg(t.icon)}<span>${t.label}</span>${b?`<span class="dot">${b}</span>`:''}</button>`;
+  }).join('');
+  const faces = MEMBERS.map(m=>av(m.id)).join('');
+  document.getElementById('railFaces').innerHTML = faces;
+  document.getElementById('topFaces').innerHTML = faces;
+  save();
+}
+
+let toastT;
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.innerHTML = msg; el.hidden = false;
+  clearTimeout(toastT); toastT = setTimeout(()=>el.hidden = true, 2600);
+}
+const ov = document.getElementById('ov'), sheet = document.getElementById('sheet');
+function openSheet(html){ sheet.innerHTML = html; ov.hidden = false; const f = sheet.querySelector('input,select,textarea'); if(f) f.focus(); }
+function closeSheet(){ ov.hidden = true; sheet.innerHTML = ''; }
+ov.addEventListener('click', e=>{ if(e.target===ov) closeSheet(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !ov.hidden) closeSheet(); });
+
+/* ---------- sheets ---------- */
+function sheetExpense(){
+  openSheet(`
+    <h3>新增费用</h3>
+    <p class="hint">MVP 阶段按参与人平均分摊，金额自动计算。</p>
+    <div class="fld"><label for="f-t">费用名称</label><input type="text" id="f-t" placeholder="例如：煤气费"></div>
+    <div class="fld"><label for="f-a">金额（S$）</label><input type="number" id="f-a" min="0" step="0.01" placeholder="0.00" inputmode="decimal"></div>
+    <div class="fld"><label for="f-p">付款人</label><select id="f-p">${MEMBERS.map(m=>`<option value="${m.id}" ${m.id===ME?'selected':''}>${m.name}${m.id===ME?'（你）':''}</option>`).join('')}</select></div>
+    <div class="fld"><label>参与成员</label><div class="who-pick" id="f-who">${MEMBERS.map(m=>`<button type="button" data-m="${m.id}" aria-pressed="true">${av(m.id)}${m.name}</button>`).join('')}</div></div>
+    <div class="fld"><label for="f-d">日期</label><input type="date" id="f-d" value="2026-09-12"></div>
+    <div class="calc" id="f-calc"><span>平均分摊 · 每人</span><b>S$0</b></div>
+    <div class="acts"><button class="btn" data-act="close">取消</button><button class="btn pri" data-act="saveExpense">保存费用</button></div>`);
+  const upd = ()=>{
+    const a = parseFloat(document.getElementById('f-a').value)||0;
+    const n = sheet.querySelectorAll('#f-who button[aria-pressed="true"]').length || 1;
+    sheet.querySelector('#f-calc b').textContent = money(a/n);
+  };
+  document.getElementById('f-a').addEventListener('input', upd);
+  sheet.querySelectorAll('#f-who button').forEach(b=>b.addEventListener('click',()=>{
+    const on = b.getAttribute('aria-pressed')==='true';
+    if(on && sheet.querySelectorAll('#f-who button[aria-pressed="true"]').length===1) return;
+    b.setAttribute('aria-pressed', on?'false':'true'); upd();
+  }));
+}
+
+function sheetRestock(id){
+  const s = S.supplies.find(x=>x.id===id);
+  openSheet(`
+    <h3>补充 ${s.name}</h3>
+    <p class="hint">填写购买金额后，会自动在「费用」中生成一笔三人 AA 的公共支出。</p>
+    <div class="fld"><label for="r-q">新增数量（${s.unit}）</label><input type="number" id="r-q" min="1" value="${Math.max(s.min*2, 4)}" inputmode="numeric"></div>
+    <div class="fld"><label for="r-a">购买金额（S$，可留空）</label><input type="number" id="r-a" min="0" step="0.01" value="18" inputmode="decimal"></div>
+    <div class="calc" id="r-calc"><span>三人平均分摊 · 每人</span><b>S$6</b></div>
+    <div class="acts"><button class="btn" data-act="close">取消</button><button class="btn pri" data-act="saveRestock" data-id="${id}">确认补充</button></div>`);
+  document.getElementById('r-a').addEventListener('input', e=>{
+    sheet.querySelector('#r-calc b').textContent = money((parseFloat(e.target.value)||0)/3);
+  });
+}
+
+function sheetRule(){
+  openSheet(`
+    <h3>新增公约</h3>
+    <p class="hint">三位室友全部确认后，公约才会标记为已生效。</p>
+    <div class="fld"><label for="n-t">标题</label><input type="text" id="n-t" placeholder="例如：快递代收"></div>
+    <div class="fld"><label for="n-b">内容</label><textarea id="n-b" placeholder="写清楚大家都认可的做法"></textarea></div>
+    <div class="fld"><label for="n-c">分类</label><select id="n-c"><option>清洁</option><option>噪音</option><option>访客</option><option>费用</option><option>其他</option></select></div>
+    <div class="acts"><button class="btn" data-act="close">取消</button><button class="btn pri" data-act="saveRule">发起公约</button></div>`);
+}
+
+/* ---------- actions ---------- */
+document.addEventListener('click', e=>{
+  const el = e.target.closest('[data-act]'); if(!el) return;
+  const id = el.dataset.id, act = el.dataset.act;
+
+  if(act==='go'){ S.tab = el.dataset.tab; render(); window.scrollTo({top:0}); }
+
+  else if(act==='close'){ closeSheet(); }
+
+  else if(act==='doneChore'){
+    const c = S.chores.find(x=>x.id===id); c.done = true;
+    log(c.who, `完成了值日「${c.task}」`);
+    render(); toast(`已完成「${c.task}」 · 首页同步更新`);
+  }
+  else if(act==='undoChore'){ S.chores.find(x=>x.id===id).done = false; render(); }
+
+  else if(act==='settle'){
+    const x = S.expenses.find(v=>v.id===id); x.settled = true;
+    log(ME, `将「${x.title}」标记为已结清`);
+    render(); toast(`「${x.title}」已结清`);
+  }
+  else if(act==='unsettle'){ S.expenses.find(v=>v.id===id).settled = false; render(); }
+
+  else if(act==='inc'){ const s = S.supplies.find(x=>x.id===id); s.qty++; s.max = Math.max(s.max, s.qty); render(); }
+  else if(act==='dec'){ const s = S.supplies.find(x=>x.id===id); s.qty = Math.max(0, s.qty-1); render(); }
+
+  else if(act==='restock'){ sheetRestock(id); }
+  else if(act==='saveRestock'){
+    const s = S.supplies.find(x=>x.id===id);
+    const q = Math.max(1, parseInt(document.getElementById('r-q').value)||1);
+    const amt = parseFloat(document.getElementById('r-a').value)||0;
+    s.qty += q; s.max = Math.max(s.max, s.qty);
+    let msg = `${s.name} +${q} ${s.unit}`;
+    if(amt > 0){
+      S.expenses.unshift({id:'e'+Date.now(), title:s.name, note:`补充 ${q} ${s.unit}`, amount:amt,
+        payer:ME, people:MEMBERS.map(m=>m.id), date:'2026-09-12', settled:false});
+      msg += ` · 已生成 AA 费用 ${money(amt)}（每人 ${money(amt/3)}）`;
+      log(ME, `补充了${s.name} <b>+${q} ${s.unit}</b>，新增费用 <b>${money(amt)}</b>`);
+    } else {
+      log(ME, `补充了${s.name} <b>+${q} ${s.unit}</b>`);
+    }
+    closeSheet(); render(); toast(msg);
+  }
+
+  else if(act==='confirm'){
+    const r = S.rules.find(x=>x.id===id); if(!r.by.includes(ME)) r.by.push(ME);
+    log(ME, `确认了公约「${r.title}」`);
+    render(); toast(`「${r.title}」已 ${r.by.length}/3 确认 · 公约生效`);
+  }
+
+  else if(act==='newExpense'){ sheetExpense(); }
+  else if(act==='saveExpense'){
+    const title = document.getElementById('f-t').value.trim() || '公共费用';
+    const amount = parseFloat(document.getElementById('f-a').value)||0;
+    if(amount <= 0){ toast('请填写大于 0 的金额'); document.getElementById('f-a').focus(); return; }
+    const payer = document.getElementById('f-p').value;
+    const people = [...sheet.querySelectorAll('#f-who button[aria-pressed="true"]')].map(b=>b.dataset.m);
+    S.expenses.unshift({id:'e'+Date.now(), title, note:'', amount, payer, people,
+      date: document.getElementById('f-d').value || '2026-09-12', settled:false});
+    log(payer, `新增了费用 <b>${title} ${money(amount)}</b>`);
+    S.tab = 'expense'; closeSheet(); render();
+    toast(`已记录「${title}」 · 每人 ${money(amount/people.length)}`);
+  }
+
+  else if(act==='newRule'){ sheetRule(); }
+  else if(act==='saveRule'){
+    const title = document.getElementById('n-t').value.trim();
+    if(!title){ toast('请填写公约标题'); document.getElementById('n-t').focus(); return; }
+    S.rules.push({id:'r'+Date.now(), title, cat:document.getElementById('n-c').value,
+      body: document.getElementById('n-b').value.trim() || '（暂无详细说明）', by:[ME]});
+    log(ME, `发起了新公约「${title}」，等待室友确认`);
+    closeSheet(); render(); toast(`「${title}」已发起 · 等待 Alex 和 Tom 确认`);
+  }
+
+  else if(act==='reset'){ S = structuredClone(SEED); render(); toast('演示数据已重置'); }
+});
+
+render();
+</script>
