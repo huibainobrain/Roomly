@@ -43,9 +43,9 @@ const srcTag = (s, cls) => s ? `<span class="srctag ${cls || ''}">${svg(I.info)}
 /* ============================================================
    首页
    ============================================================ */
-/* 图片位：缺图时 <img> 自行移除，露出占位说明，尺寸由 CSS 固定 */
+/* 图片位：有图时补 .ok 收起占位说明，缺图时 <img> 自行移除、露出说明，尺寸由 CSS 固定 */
 const imgSlot = (src, label) =>
-  `<figure class="ph"><img src="${src}" alt="" onerror="this.remove()"><figcaption>${label}</figcaption></figure>`;
+  `<figure class="ph"><img src="${src}" alt="" onload="this.parentNode.classList.add('ok')" onerror="this.remove()"><figcaption>${label}</figcaption></figure>`;
 
 function vHome() {
   /* ---- 业务数据与原来完全一致 ---- */
@@ -106,7 +106,7 @@ function vHome() {
       <p>新的一天，从一个整洁、温暖的家开始。</p>
       <div class="wl-meta">${HOUSE.name} · 和室友一起住的第 ${daysTogether()} 天</div>
     </div>
-    ${imgSlot('img/home-welcome.png', '待补欢迎横幅氛围图<br>窗边阳光 · 绿植 · 桌椅')}
+    ${imgSlot('img/home-welcome.jpg', '待补欢迎横幅氛围图<br>窗边阳光 · 绿植 · 桌椅')}
   </section>
 
   <div class="hgrid">
@@ -121,7 +121,7 @@ function vHome() {
     </section>
 
     <section class="mood">
-      ${imgSlot('img/home-mood.png', '待补首页主视觉<br>沙发 · 猫 · 绿植 · 午后光线')}
+      ${imgSlot('img/home-mood.jpg', '待补首页主视觉<br>沙发 · 猫 · 绿植 · 午后光线')}
       <div class="mbody">
         <div class="ml">今天，家里怎么样</div>
         <h2>${calm ? '一切正常，没有需要协调的事' : `有 ${watch.length} 件事值得留意`}</h2>
@@ -154,7 +154,7 @@ function vHome() {
   </div>
 
   <section class="lifeband">
-    ${imgSlot('img/home-lifeband.png', '待补底部生活方式横幅<br>绿植 · 柔和光线 · 生活场景')}
+    ${imgSlot('img/home-lifeband.jpg', '待补底部生活方式横幅<br>绿植 · 柔和光线 · 生活场景')}
     <div class="lbtext"><p>生活不一定完美，但一个互相体谅的家，可以很美。</p></div>
   </section>`;
 }
