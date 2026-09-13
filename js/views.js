@@ -267,6 +267,7 @@ function vLife() {
 
   <section class="lwelcome">
     <div class="lw-text">
+      <button class="lw-cta" data-act="awkward">${svg(I.talk)}有件事不好开口</button>
       <h2>一起生活，<br>把日子过成自己喜欢的样子。</h2>
       <p>分享空间，也分享日常里的小确幸。</p>
     </div>
@@ -360,8 +361,7 @@ function vLife() {
 
   <section class="lband">
     ${imgSlot('img/life-band.jpg', '待补底部横幅图<br>绿植 · 猫 · 沙发一角 · 柔和光线')}
-    <div class="lbt"><p>生活不只是住在一起，<br>更是和不同的人，一起把日子过舒服。</p>
-      <button class="btn" data-act="awkward">有件事不好开口</button></div>
+    <div class="lbt"><p>生活不只是住在一起，<br>更是和不同的人，一起把日子过舒服。</p></div>
   </section>`;
 }
 

@@ -320,7 +320,13 @@ main{flex:1;min-width:0}
 .lwelcome{display:grid;grid-template-columns:minmax(300px,1fr) 1.25fr;align-items:stretch;
   background:linear-gradient(115deg,var(--sage-soft),var(--cream) 75%);border:1px solid var(--sage-line);
   border-radius:24px;overflow:hidden;margin-bottom:4px}
-.lw-text{padding:26px 30px;display:flex;flex-direction:column;justify-content:center;gap:8px}
+.lw-text{position:relative;padding:26px 30px;display:flex;flex-direction:column;justify-content:center;gap:8px}
+/* 「不好开口」入口放在横幅文字栏右上角：白色药丸、鼠尾草绿字 */
+.lw-cta{position:absolute;top:16px;right:18px;display:inline-flex;align-items:center;gap:6px;
+  background:var(--surface);border:1px solid var(--sage-line);border-radius:999px;padding:7px 14px 7px 11px;
+  font-size:12.5px;font-weight:600;color:var(--sage-deep);box-shadow:var(--shadow);white-space:nowrap}
+.lw-cta svg{width:14px;height:14px;opacity:.85}
+.lw-cta:hover{background:var(--sage-soft);border-color:var(--sage)}
 .lw-text h2{font-size:24px;font-weight:600;line-height:1.35;color:var(--sage-deep)}
 .lw-text p{font-size:14px;color:var(--ink-2)}
 .lwelcome .ph{border:0;border-radius:0;aspect-ratio:auto;min-height:152px;background:var(--sand-2)}
@@ -432,11 +438,9 @@ main{flex:1;min-width:0}
 .lband .ph{border:0;border-radius:0;aspect-ratio:auto;min-height:132px}
 .lband .ph img{object-position:50% 56%}   /* 取猫和沙发那一条 */
 .lband .ph figcaption{position:absolute;top:12px;left:0;right:0}
-.lband .lbt{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 28px}
+.lband .lbt{position:absolute;inset:0;display:flex;align-items:center;padding:20px 28px}
 .lband .lbt p{font-family:var(--f-d);font-size:16.5px;font-weight:600;color:var(--sage-deep);max-width:34ch;line-height:1.5}
-.lband .lbt .btn{background:var(--surface);border-color:transparent;box-shadow:var(--shadow);flex:none}
 .lband:has(.ph.ok) .lbt p{color:#3D6B52;text-shadow:0 1px 14px rgba(252,248,241,.9)}
-.lband:has(.ph.ok) .lbt .btn{background:#fff;color:#3D6B52}
 
 @media (max-width:1080px){
   .agenda{grid-template-columns:1fr 1fr}
@@ -450,8 +454,10 @@ main{flex:1;min-width:0}
   .agenda,.lcards{grid-template-columns:1fr}
   .agmoment{min-height:190px}
   .lifetop .ltme{display:none}  /* 移动端顶栏已有头像，不再重复 */
+  .lw-text{padding-top:52px}
+  .lw-cta{top:14px;right:14px}
   .lband .ph{min-height:172px}
-  .lband .lbt{flex-direction:column;align-items:flex-start;justify-content:center;padding:18px 20px;gap:12px}
+  .lband .lbt{padding:18px 20px}
   /* 窄屏只露出素材中段，取景往左偏到空墙那侧，再压一层浅色让文字读得清 */
   .lband .ph img{object-position:22% 56%}
   .lband:has(.ph.ok) .lbt{background:linear-gradient(90deg,rgba(252,248,241,.88),rgba(252,248,241,.45) 62%,transparent)}
