@@ -1,69 +1,86 @@
 /* ============================================================
    合租生活管家 · 数据层
-   House 是核心对象，成员可以入住 / 离家 / 搬出，House 持续存在。
+
+   核心约束：页面上每一个动态事实，都必须能回答"谁在什么时候
+   通过什么动作产生了它"。来源只有四类：
+     member   成员主动登记
+     shared   成员共同设定
+     derived  系统根据已有记录计算
+     platform 租赁机构同步
+   系统不感知真实生活，只知道被登记下来的事。
    ============================================================ */
 
 const TODAY = '9月12日';
+const NOW = '21:05';
 
 const HOUSE = {
   name: '望京西园三区 · 503',
   org: '相寓 · 托管房源',
   steward: '陈管家',
-  nextClean: '周四 10:00',
-  repair: { item: '厨房灯', status: '维修中', eta: '师傅预计周三上门' }
+  /* 保洁由机构排期，住户不手动新增 */
+  clean: { next:'周四 10:00', src:{ via:'platform', at:'9月9日' } }
 };
 
-/* 生活偏好的两种性质：
-   rule = 容易产生摩擦、需要形成共同规则的
-   info = 只用于彼此了解、不需要统一的
-   cmp  = 新成员加入时会拿来比对的。作息、做饭频率这类天生因人而异，
-          比出"差异"只会制造没必要的协商，所以不参与比对。          */
+/* ---------- 来源标记 ---------- */
+const VIA_LABEL = { member:'成员登记', shared:'共同设定', derived:'系统推导', platform:'相寓同步' };
+function srcNote(s) {
+  if (!s) return '';
+  if (s.via === 'platform') return `相寓同步${s.at ? ' · ' + s.at : ''}`;
+  if (s.via === 'derived')  return s.note || '系统根据已有记录计算';
+  if (s.via === 'shared')   return `全员共同设定${s.at ? ' · ' + s.at : ''}`;
+  return `${mem(s.by).name} · ${s.at}`;
+}
+
+/* ---------- 生活偏好 ---------- */
 const PREF_KEYS = [
-  { k: 'quiet',    label: '安静时间',   kind: 'rule', cmp: true },
-  { k: 'visitor',  label: '朋友来访',   kind: 'rule', cmp: true },
-  { k: 'overnight',label: '访客留宿',   kind: 'rule', cmp: true },
-  { k: 'kitchen',  label: '厨房恢复',   kind: 'rule', cmp: true },
-  { k: 'supply',   label: '公共用品',   kind: 'rule', cmp: true },
-  { k: 'temp',     label: '空调温度',   kind: 'rule', cmp: true },
-  { k: 'smoke',    label: '吸烟',       kind: 'rule', cmp: true },
-  { k: 'social',   label: '室友关系',   kind: 'info', cmp: true },
-  { k: 'sleep',    label: '作息',       kind: 'info' },
-  { k: 'conflict', label: '沟通方式',   kind: 'info' },
-  { k: 'cook',     label: '做饭频率',   kind: 'info' },
-  { k: 'pet',      label: '宠物',       kind: 'info' }
+  { k:'quiet',    label:'安静时间', kind:'rule', cmp:true },
+  { k:'visitor',  label:'朋友来访', kind:'rule', cmp:true },
+  { k:'overnight',label:'访客留宿', kind:'rule', cmp:true },
+  { k:'kitchen',  label:'厨房恢复', kind:'rule', cmp:true },
+  { k:'supply',   label:'公共用品', kind:'rule', cmp:true },
+  { k:'temp',     label:'空调温度', kind:'rule', cmp:true },
+  { k:'smoke',    label:'吸烟',     kind:'rule', cmp:true },
+  { k:'social',   label:'室友关系', kind:'info', cmp:true },
+  { k:'sleep',    label:'作息',     kind:'info' },
+  { k:'conflict', label:'沟通方式', kind:'info' },
+  { k:'cook',     label:'做饭频率', kind:'info' },
+  { k:'pet',      label:'宠物',     kind:'info' }
 ];
 
+/* 成员的租约信息来自机构，生活偏好来自本人填写的入住共识 */
 const MEMBERS = [
   { id:'yiming', name:'Yiming', short:'YM', c:'#2A7059', room:'02室', me:true, joined:'6月1日',
+    lease:{ via:'platform', at:'6月1日' },
     prefs:{ quiet:'23:30', visitor:'提前说一声', overnight:'每周 ≤2 晚', kitchen:'台面擦净，锅具当天洗',
             supply:'统一采购 AA', temp:'25°C', smoke:'家里都不吸',
             sleep:'23:45 左右', social:'礼貌互不打扰', conflict:'系统先中立提醒', cook:'偶尔做饭', pet:'不养，可以接受' } },
   { id:'alex', name:'Alex', short:'AX', c:'#A3651E', room:'01室', joined:'4月15日',
+    lease:{ via:'platform', at:'4月15日' },
     prefs:{ quiet:'23:30', visitor:'提前说一声', overnight:'不限', kitchen:'台面擦净，锅具当天洗',
             supply:'统一采购 AA', temp:'25°C', smoke:'家里都不吸',
             sleep:'00:30 左右', social:'偶尔一起聊天吃饭', conflict:'私下直接说', cook:'经常做饭', pet:'不养，可以接受' } },
   { id:'tom', name:'Tom', short:'TM', c:'#3F5F80', room:'03室', joined:'3月1日',
+    lease:{ via:'platform', at:'3月1日' },
     prefs:{ quiet:'23:30', visitor:'提前说一声', overnight:'每周 ≤1 晚', kitchen:'台面擦净，锅具当天洗',
             supply:'统一采购 AA', temp:'26°C', smoke:'家里都不吸',
             sleep:'23:00 左右', social:'礼貌互不打扰', conflict:'系统先中立提醒', cook:'几乎不做饭', pet:'不养，可以接受' } },
   { id:'lin', name:'Lin', short:'LN', c:'#6B4A6E', room:'04室', incoming:true, joined:'9月20日',
+    lease:{ via:'platform', at:'9月8日' },
+    prefsSrc:{ via:'member', by:'lin', at:'9月10日' },
     prefs:{ quiet:'23:30', visitor:'提前说一声', overnight:'不限', kitchen:'台面擦净，锅具当天洗',
             supply:'统一采购 AA', temp:'27°C', smoke:'家里都不吸',
             sleep:'00:30 左右', social:'礼貌互不打扰', conflict:'系统先中立提醒', cook:'偶尔做饭', pet:'不养，可以接受' } }
 ];
 
-/* 最影响共同生活的四项，其余默认收起 */
 const KEY_PREFS = ['quiet', 'overnight', 'kitchen', 'temp'];
 
 const ME = 'yiming';
-/* 当前用户改过的偏好存在 state 里，这样刷新后不会丢 */
 const mem = id => {
   const base = MEMBERS.find(m => m.id === id) || { id, name:id, short:'?', c:'#8A938D', prefs:{} };
   if (id === ME && typeof S !== 'undefined' && S && S.myPrefs)
     return { ...base, prefs: { ...base.prefs, ...S.myPrefs } };
   return base;
 };
-/* 当前实际住在这里的人：不含尚未入住和已搬出的 */
 const living = () => MEMBERS.filter(m => !m.incoming && !S.movedOut.includes(m.id)).map(m => mem(m.id));
 
 /* ============ 图标 ============ */
@@ -97,8 +114,6 @@ const I = {
   tool:'<path d="M14.5 6.5a3.5 3.5 0 0 0 4.6 4.6l-8 8a2.3 2.3 0 0 1-3.2-3.2l8-8Z"/><path d="M6 6l3 3"/>',
   lock:'<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7.6a3.5 3.5 0 0 1 7 0v2.9"/>',
   phone:'<path d="M6 3h4l2 5-2.5 1.5a12 12 0 0 0 5 5L16 12l5 2v4a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4 5.2 2 2 0 0 1 6 3Z"/>',
-  broom:'<path d="M17 3 9.5 10.5"/><path d="M6 21c-1-3 0-6 2.5-7.5l3 3C10 19 9 20.5 6 21Z"/><path d="m11 9 4 4"/>',
-  door:'<path d="M5 21V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v17"/><path d="M3 21h18M13 12h.01"/>',
   note:'<path d="M6 3h9l4 4v14H6V3Z"/><path d="M15 3v4h4"/><path d="M9.5 12h5M9.5 16h5"/>'
 };
 const svg = (p, w) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w||1.8}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
@@ -113,91 +128,138 @@ const yuan = n => {
   const v = Math.round(n * 100) / 100;
   return '¥' + (Number.isInteger(v) ? v : v.toFixed(2));
 };
+/* 系统只知道谁登记了离家，不知道谁此刻在不在家 */
 const statusOf = id => {
   if (S.movedOut.includes(id)) return 'gone';
   if (mem(id).incoming) return 'incoming';
-  return S.away.some(a => a.who === id && a.active) ? 'away' : 'home';
+  return S.away.some(a => a.who === id && a.active) ? 'away' : 'in';
 };
-const STATUS_TEXT = { home:'当前在家', away:'离家中', incoming:'即将入住', gone:'已搬出' };
+const STATUS_TEXT = { in:'在住', away:'登记离家中', incoming:'即将入住', gone:'已搬出' };
 
 /* ============ 初始状态 ============ */
+const SUPPLY_STATES = ['充足', '不多了', '快用完', '已用完'];
+
 const SEED = {
   tab: 'home',
   sub: null,
   segment: 'public',
   movedOut: [],
 
+  /* 离家只有这一份原始记录，成员状态、值日、采购、公平分摊都由它推导 */
   away: [
-    { id:'a1', who:'tom', from:'9月8日', to:'9月18日', days:10, active:true }
+    { id:'a1', who:'tom', from:'9月8日', to:'9月18日', days:10, active:true,
+      src:{ via:'member', by:'tom', at:'9月7日 22:10' } }
   ],
 
+  /* 值日 = 共同设定的固定任务模板 + 按日期和离家状态生成的当期安排 */
+  choreTemplates: [
+    { id:'ct1', task:'倒垃圾',        every:'每 2 天', src:{ via:'shared', at:'6月1日' } },
+    { id:'ct2', task:'卫生间简单整理', every:'每周',    src:{ via:'shared', at:'6月1日' } },
+    { id:'ct3', task:'公共用品检查',   every:'每周',    src:{ via:'shared', at:'6月1日' } },
+    { id:'ct4', task:'保洁前整理',     every:'每两周',  src:{ via:'shared', at:'8月20日' } }
+  ],
   tasks: [
-    { id:'t1', task:'倒垃圾',          who:'yiming', due:'今天',   done:false },
-    { id:'t2', task:'周日保洁前整理',   who:'yiming', due:'周日',   done:false },
-    { id:'t3', task:'卫生间简单整理',   who:'alex',   due:'今天',   done:true  },
-    { id:'t4', task:'公共用品补充',     who:'tom',    due:'本周内', done:false, note:'Tom 离家中，已暂缓' }
+    { id:'t1', tpl:'ct1', task:'倒垃圾',          who:'yiming', due:'今天',   done:false },
+    { id:'t2', tpl:'ct4', task:'保洁前整理',      who:'yiming', due:'周日',   done:false },
+    { id:'t3', tpl:'ct2', task:'卫生间简单整理',   who:'alex',   due:'今天',   done:true, doneAt:'今天 09:20' },
+    { id:'t4', tpl:'ct3', task:'公共用品检查',     who:'tom',    due:'本周内', done:false }
   ],
-  /* 最近 4 周实际承担的任务数，用于解释责任分布 */
-  load: { yiming:6, alex:6, tom:4 },
+  /* 最近 4 周的完成记录，责任分布由它统计，不写死数字 */
+  completions: [
+    ['倒垃圾','yiming','9月10日'],['倒垃圾','alex','9月8日'],['倒垃圾','tom','9月6日'],
+    ['倒垃圾','yiming','9月4日'],['倒垃圾','alex','9月2日'],['卫生间简单整理','alex','今天'],
+    ['卫生间简单整理','tom','9月5日'],['卫生间简单整理','yiming','8月29日'],
+    ['公共用品检查','tom','9月1日'],['公共用品检查','alex','8月25日'],
+    ['保洁前整理','yiming','9月7日'],['保洁前整理','alex','8月24日'],
+    ['倒垃圾','yiming','8月31日'],['倒垃圾','tom','8月27日'],
+    ['倒垃圾','yiming','8月23日'],['倒垃圾','alex','8月19日']
+  ],
 
+  /* 公共消耗品分两种：数量型逐个计数，状态型只选档位 */
   supplies: [
-    { id:'s1', kind:'public', name:'厕纸',   qty:2, min:3, unit:'卷', max:12 },
-    { id:'s2', kind:'public', name:'垃圾袋', qty:14, min:5, unit:'个', max:30 },
-    { id:'s3', kind:'public', name:'洗洁精', qty:2, min:2, unit:'瓶', max:4 },
-    { id:'s4', kind:'public', name:'厨房纸', qty:3, min:2, unit:'卷', max:6 },
-    { id:'s5', kind:'lend', name:'空气炸锅', owner:'yiming', rule:'可直接使用，用后清洗放回' },
-    { id:'s6', kind:'lend', name:'工具箱',   owner:'alex',   rule:'使用前问一声' },
-    { id:'s7', kind:'lend', name:'行李箱',   owner:'tom',    rule:'使用前问一声' },
-    { id:'s8', kind:'private', name:'个人食材与调料', owner:'yiming', zone:'冰箱上层' },
-    { id:'s9', kind:'private', name:'私人洗护用品',   owner:'alex',   zone:'卫生间 B 区' },
-    { id:'s10',kind:'private', name:'私人物品',       owner:'tom',    zone:'03室 与 鞋柜 C 区' }
+    { id:'s1', kind:'public', mode:'count', name:'厕纸',   qty:2,  min:3, unit:'卷', max:12,
+      src:{ via:'member', by:'alex', at:'今天 18:20' } },
+    { id:'s2', kind:'public', mode:'count', name:'垃圾袋', qty:14, min:5, unit:'个', max:30,
+      src:{ via:'member', by:'yiming', at:'9月6日 11:05' } },
+    { id:'s3', kind:'public', mode:'count', name:'厨房纸', qty:3,  min:2, unit:'卷', max:6,
+      src:{ via:'member', by:'tom', at:'9月4日 19:40' } },
+    { id:'s4', kind:'public', mode:'state', name:'洗洁精', state:'不多了',
+      src:{ via:'member', by:'alex', at:'9月9日 21:30' } },
+    { id:'s5', kind:'public', mode:'state', name:'洗衣液', state:'充足',
+      src:{ via:'member', by:'yiming', at:'9月1日 10:15' } },
+    { id:'s6', kind:'lend', name:'空气炸锅', owner:'yiming', rule:'可直接使用，用后清洗放回',
+      src:{ via:'member', by:'yiming', at:'6月3日' } },
+    { id:'s7', kind:'lend', name:'工具箱',   owner:'alex',   rule:'使用前问一声',
+      src:{ via:'member', by:'alex', at:'5月2日' } },
+    { id:'s8', kind:'private', name:'个人食材与调料', owner:'yiming', zone:'冰箱上层',
+      src:{ via:'member', by:'yiming', at:'6月3日' } },
+    { id:'s9', kind:'private', name:'私人洗护用品',   owner:'alex',   zone:'卫生间 B 层',
+      src:{ via:'member', by:'alex', at:'5月2日' } }
   ],
 
-  /* 四位成员各有自己的分区。Lin 是新增的第四位，不接手任何人正在用的空间，
-     她的分区标记为 pending，9月20日入住后才生效。 */
+  /* 分区是一次共同设定的结果，新成员的分区需要单独确认 */
   spaces: [
-    { id:'sp1', name:'冰箱', icon:'fridge',
-      zones:[{n:'上层',o:'yiming'},{n:'中层',o:'alex'},{n:'下层',o:'tom'},
-             {n:'保鲜抽屉',o:'lin',pending:true},{n:'门侧',o:'public'}] },
-    { id:'sp2', name:'厨房储物柜', icon:'cabinet',
-      zones:[{n:'A 格',o:'yiming'},{n:'B 格',o:'alex'},{n:'C 格',o:'tom'},
-             {n:'D 格',o:'lin',pending:true},{n:'E 格',o:'public'}] },
-    { id:'sp3', name:'卫生间置物架', icon:'shelf',
-      zones:[{n:'A 层',o:'yiming'},{n:'B 层',o:'alex'},{n:'C 层',o:'tom'},
-             {n:'D 层',o:'lin',pending:true}] },
-    { id:'sp4', name:'鞋柜', icon:'shoe',
-      zones:[{n:'A 区',o:'yiming'},{n:'B 区',o:'alex'},{n:'C 区',o:'tom'},
-             {n:'D 区',o:'lin',pending:true}] }
+    { id:'sp1', name:'冰箱', icon:'fridge', src:{ via:'shared', at:'6月2日' },
+      zones:[{n:'上层',o:'yiming'},{n:'中层',o:'alex'},{n:'下层',o:'tom'},{n:'门侧',o:'public'}] },
+    { id:'sp2', name:'厨房储物柜', icon:'cabinet', src:{ via:'shared', at:'6月2日' },
+      zones:[{n:'A 格',o:'yiming'},{n:'B 格',o:'alex'},{n:'C 格',o:'tom'},{n:'E 格',o:'public'}] },
+    { id:'sp3', name:'卫生间置物架', icon:'shelf', src:{ via:'shared', at:'6月2日' },
+      zones:[{n:'A 层',o:'yiming'},{n:'B 层',o:'alex'},{n:'C 层',o:'tom'}] },
+    { id:'sp4', name:'鞋柜', icon:'shoe', src:{ via:'shared', at:'6月2日' },
+      zones:[{n:'A 区',o:'yiming'},{n:'B 区',o:'alex'},{n:'C 区',o:'tom'}] }
   ],
+  /* 新成员的分区建议，确认后才写进 spaces */
+  zoneProposal: { who:'lin', confirmed:false,
+    items:[{ sp:'sp1', n:'保鲜抽屉' },{ sp:'sp2', n:'D 格' },{ sp:'sp3', n:'D 层' },{ sp:'sp4', n:'D 区' }] },
 
-  /* 时间线：本周此前有 3 晚留宿登记，今晚是普通到访、不留宿。两者并存但不冲突。 */
+  /* 访客逐条登记，留宿次数由这些记录累计得出 */
   visits: [
-    { id:'v1', host:'alex', guest:'朋友', when:'今晚 19:00–22:00', overnight:false, status:'已告知' },
-    { id:'v0', host:'alex', guest:'朋友', when:'9月9日 — 9月11日', overnight:true, nights:3, status:'已登记' }
+    { id:'v4', host:'alex', guest:'朋友', date:'今天',  time:'19:00–22:00', overnight:false, week:true,
+      src:{ via:'member', by:'alex', at:'昨天 21:10' } },
+    { id:'v3', host:'alex', guest:'朋友', date:'9月11日', time:'20:30 起', overnight:true, week:true,
+      src:{ via:'member', by:'alex', at:'9月11日 20:05' } },
+    { id:'v2', host:'alex', guest:'朋友', date:'9月10日', time:'21:00 起', overnight:true, week:true,
+      src:{ via:'member', by:'alex', at:'9月10日 20:40' } },
+    { id:'v1', host:'alex', guest:'朋友', date:'9月9日',  time:'20:00 起', overnight:true, week:true,
+      src:{ via:'member', by:'alex', at:'9月9日 19:30' } }
   ],
-  /* 本周同一访客的留宿登记晚数。系统只知道登记记录，不知道实际住了几晚。 */
-  nights: { yiming:0, alex:3, tom:0 },
   visitAsks: [
-    { id:'va1', host:'alex', text:'希望朋友本周再留宿 1 晚', nights:4, replies:{} }
+    { id:'va1', host:'alex', text:'希望朋友本周再留宿 1 晚', replies:{} }
   ],
 
-  laundry: { user:'alex', endsAt:'21:40', notifyMe:false, idleMinutes:0 },
+  /* 洗衣机：谁点了开始使用、选了多久，状态就是什么 */
+  laundry: { user:null, startedAt:null, minutes:0, endsAt:null, notifyMe:false, src:null },
+
+  /* 报修：住户提交，机构更新处理进度 */
+  repairs: [
+    { id:'rp1', place:'厨房', desc:'厨房灯不亮', by:'yiming',
+      timeline:[
+        { s:'已提交',       at:'9月11日 20:30', via:'member' },
+        { s:'管家已受理',   at:'9月11日 21:10', via:'platform' },
+        { s:'师傅预计周三上门', at:'今天 09:20', via:'platform' }
+      ] }
+  ],
 
   bills: [
     { id:'b1', title:'9月上半月水电', note:'国网 + 自来水', amount:180, payer:'alex',
-      people:['yiming','alex','tom'], method:'even', settled:false, date:'9月10日' },
+      people:['yiming','alex','tom'], method:'even', settled:false, date:'9月10日',
+      src:{ via:'manual', by:'alex', at:'9月10日 19:22' } },
     { id:'b2', title:'公共清洁用品', note:'洗衣液 · 消毒液 · 抹布', amount:48, payer:'tom',
-      people:['yiming','alex','tom'], method:'even', settled:false, date:'9月6日' },
+      people:['yiming','alex','tom'], method:'even', settled:false, date:'9月6日',
+      src:{ via:'supply', by:'tom', at:'9月6日 20:10' } },
     { id:'b3', title:'公共纸品补充', note:'厕纸 · 厨房纸', amount:30, payer:'yiming',
-      people:['yiming','alex','tom'], method:'even', settled:false, date:'9月4日' },
+      people:['yiming','alex','tom'], method:'even', settled:false, date:'9月4日',
+      src:{ via:'supply', by:'yiming', at:'9月4日 18:50' } },
     { id:'b4', title:'阳台防水材料', note:'01室与03室共用阳台', amount:60, payer:'tom',
-      people:['alex','tom'], method:'even', settled:false, date:'9月3日' },
+      people:['alex','tom'], method:'even', settled:false, date:'9月3日',
+      src:{ via:'manual', by:'tom', at:'9月3日 15:30' } },
     { id:'b5', title:'宽带费 9–11月', note:'联通 500M', amount:300, payer:'yiming',
-      people:['yiming','alex','tom'], method:'even', settled:true, date:'9月1日' },
-    { id:'b6', title:'厨房灯泡', note:'已报修，先自行更换', amount:28, payer:'alex',
-      people:['yiming','alex','tom'], method:'even', settled:true, date:'9月2日' }
+      people:['yiming','alex','tom'], method:'even', settled:true, date:'9月1日',
+      src:{ via:'manual', by:'yiming', at:'9月1日 09:40' } },
+    { id:'b6', title:'厨房灯泡', note:'报修前先自行更换', amount:28, payer:'alex',
+      people:['yiming','alex','tom'], method:'even', settled:true, date:'9月2日',
+      src:{ via:'manual', by:'alex', at:'9月2日 20:15' } }
   ],
-  /* 月末水电预估，用于情境公平演示 */
   utilityForecast: { title:'9月水电费', amount:360, days:30 },
   fairApplied: false,
 
@@ -212,21 +274,22 @@ const SEED = {
 
   topics: [],
 
-  /* 居住问题记录：只记录规则与现状的偏差，不记录"谁违规" */
   issues: [
     { id:'i1', cat:'清洁', rule:'r4', title:'厨房恢复标准', level:3, count:2, window:'最近 14 天',
-      note:'这条约定可能存在理解差异，建议重新明确一次标准。' }
+      note:'这条约定可能存在理解差异，建议重新明确一次标准。',
+      src:{ via:'derived', note:'由 2 次系统提醒记录汇总' }, follow:null }
   ],
 
   feed: [
-    { who:'sys',   text:'提醒了本周的「公共用品补充」任务', t:'2小时前' },
+    { who:'alex',  text:'把厕纸库存更新为 <b>2 卷</b>', t:'今天 18:20' },
     { who:'alex',  text:'完成了值日「卫生间简单整理」', t:'今天 09:20' },
-    { who:'alex',  text:'登记了今晚 19:00–22:00 的访客', t:'昨天' },
-    { who:'tom',   text:'登记了离家：9月8日 — 9月18日', t:'9月7日' },
-    { who:'sys',   text:'共同约定「厨房使用后当天恢复」被重新确认', t:'9月5日' }
+    { who:'sys',   text:'相寓更新了报修进度：师傅预计周三上门', t:'今天 09:20' },
+    { who:'alex',  text:'登记了今晚 19:00–22:00 的访客', t:'昨天 21:10' },
+    { who:'yiming',text:'提交了报修：厨房灯不亮', t:'9月11日 20:30' },
+    { who:'tom',   text:'登记了离家：9月8日 — 9月18日', t:'9月7日 22:10' }
   ],
 
-  onboardDone: { yiming:'8月12日', alex:'6月30日', tom:'6月30日', lin:null },
+  onboardDone: { yiming:'8月12日', alex:'6月30日', tom:'6月30日', lin:'9月10日' },
   linDiscussed: false,
   moveout: null,
   myPrefs: {},
@@ -238,18 +301,17 @@ const SEED = {
 };
 
 /* ============ 持久化 ============ */
-const KEY = 'hezu-v2';
+const KEY = 'hezu-v3';
 let S;
 try {
   const raw = JSON.parse(localStorage.getItem(KEY));
-  S = (raw && raw.bills && raw.rules && raw.spaces) ? raw : structuredClone(SEED);
+  S = (raw && raw.bills && raw.rules && raw.spaces && raw.completions) ? raw : structuredClone(SEED);
 } catch (e) { S = structuredClone(SEED); }
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
-const logFeed = (who, text) => { S.feed.unshift({ who, text, t:'刚刚' }); S.feed = S.feed.slice(0, 9); };
+const logFeed = (who, text, t) => { S.feed.unshift({ who, text, t: t || '刚刚' }); S.feed = S.feed.slice(0, 10); };
 
 /* ============ 派生计算 ============ */
-/* 分摊按"分"计算，余数依次给前几个人，保证各人金额相加等于总额。
-   否则 29.90 三人平分显示成 9.97×3 = 29.91，账目对不上。 */
+/* 分摊按"分"计算，余数依次给前几个人，保证各人金额相加等于总额 */
 function splitOf(b) {
   if (b.shares) return b.shares;
   const cents = Math.round(b.amount * 100), n = b.people.length || 1;
@@ -259,17 +321,17 @@ function splitOf(b) {
   return out;
 }
 const shareOf = (b, who) => splitOf(b)[who] || 0;
-/* 各人金额不完全相等时，单独显示的"每人"要标明是约数 */
 const perLabel = b => {
   const v = Object.values(splitOf(b));
   return (new Set(v).size === 1 ? '每人 ' : '每人约 ') + yuan(Math.max(...v));
 };
-const openBills   = () => S.bills.filter(b => !b.settled);
-const myDue       = () => openBills().filter(b => b.payer !== ME && b.people.includes(ME));
-const myDueTotal  = () => myDue().reduce((a, b) => a + shareOf(b, ME), 0);
-const monthTotal  = () => S.bills.reduce((a, b) => a + b.amount, 0);
+const BILL_SRC = { manual:'手动记录', supply:'补充公共用品时自动生成', butler:'通过管家创建' };
 
-/* 净额结算：先算每人收支，再抵消成两两转账 */
+const openBills  = () => S.bills.filter(b => !b.settled);
+const myDue      = () => openBills().filter(b => b.payer !== ME && b.people.includes(ME));
+const myDueTotal = () => myDue().reduce((a, b) => a + shareOf(b, ME), 0);
+const monthTotal = () => S.bills.reduce((a, b) => a + b.amount, 0);
+
 function netSettlement() {
   const bal = {};
   living().forEach(m => bal[m.id] = 0);
@@ -291,7 +353,7 @@ function netSettlement() {
   return { transfers: out.filter(t => t.amount >= 10), deferred: out.filter(t => t.amount < 10), balances: bal };
 }
 
-/* 按实际居住天数的公平方案 */
+/* 登记在住天数 = 当月天数 − 本人登记的离家天数。系统不掌握真实居住情况。 */
 function fairByDays() {
   const f = S.utilityForecast;
   const rows = living().map(m => {
@@ -303,14 +365,39 @@ function fairByDays() {
   return { rows, total, even: f.amount / living().length };
 }
 
-const myTasks      = () => S.tasks.filter(t => t.who === ME && !t.done);
-const lowSupplies  = () => S.supplies.filter(s => s.kind === 'public' && s.qty < s.min);
-const tonightVisits= () => S.visits.filter(v => v.when.includes('今晚'));
-const awayMembers  = () => S.away.filter(a => a.active);
-const homeCount    = () => living().filter(m => statusOf(m.id) === 'home').length;
+/* ---------- 公共物品 ---------- */
+const isLow = s => s.mode === 'count' ? s.qty < s.min : ['快用完', '已用完'].includes(s.state);
+const lowSupplies = () => S.supplies.filter(s => s.kind === 'public' && isLow(s));
+const supplyText = s => s.mode === 'count' ? `${s.qty} ${s.unit}` : s.state;
+
+/* ---------- 访客：次数由逐条记录累计 ---------- */
+const nightsOf = id => S.visits.filter(v => v.host === id && v.overnight && v.week)
+                               .reduce((n, v) => n + (v.nights || 1), 0);
+const tonightVisits = () => S.visits.filter(v => v.date === '今天');
+
+/* ---------- 洗衣机 ---------- */
+const laundryFree = () => !S.laundry.user;
+
+/* ---------- 报修 ---------- */
+const openRepairs = () => S.repairs.filter(r => r.timeline[r.timeline.length - 1].s !== '已完成');
+const repairState = r => r.timeline[r.timeline.length - 1];
+
+/* ---------- 值日 ---------- */
+const myTasks = () => S.tasks.filter(t => t.who === ME && !t.done);
+/* 责任分布由完成记录统计得出 */
+function loadByMember() {
+  const out = {};
+  living().forEach(m => out[m.id] = 0);
+  S.completions.forEach(([, by]) => { if (out[by] != null) out[by]++; });
+  return out;
+}
+/* 离家期间的任务自动标注暂缓，不在 seed 里写死 */
+const taskPaused = t => statusOf(t.who) === 'away';
+
+const awayMembers = () => S.away.filter(a => a.active);
+const awayOf = id => S.away.find(a => a.who === id && a.active);
 const incomingMember = () => MEMBERS.find(m => m.incoming && !S.movedOut.includes(m.id));
 
-/* 新成员与 House 现状的差异：只比较"容易产生摩擦"的偏好 */
 function linDiff() {
   const lin = incomingMember();
   if (!lin) return { same: [], diff: [] };
@@ -326,20 +413,19 @@ function linDiff() {
   });
   return { same, diff, lin };
 }
-/* 因新成员加入而需要重新确认的现有规则 */
 const rulesToRevisit = () => S.linDiscussed ? [] : linDiff().diff.filter(d => d.rule);
 
-/* 留宿约定：上限直接从规则文字里读，规则改了判断跟着改 */
+/* 留宿上限从约定文字里读，约定改了判断跟着改 */
 function overnightRule() {
   const rule = S.rules.find(x => x.prefKey === 'overnight');
   if (!rule) return null;
   const m = (rule.title + rule.desc).match(/(\d+)\s*晚/);
   const limit = m ? +m[1] : 2;
-  const actual = Math.max(0, ...living().map(x => S.nights[x.id] || 0));
-  return { rule, limit, actual, exceeded: actual > limit };
+  const actual = Math.max(0, ...living().map(x => nightsOf(x.id)));
+  const who = living().find(x => nightsOf(x.id) === actual);
+  return { rule, limit, actual, who: who && who.id, exceeded: actual > limit };
 }
 
-/* 入住共识结果：三位在住成员之间的一致与分歧 */
 function consensusResult() {
   const agree = [], talk = [];
   PREF_KEYS.filter(p => p.kind === 'rule').forEach(pk => {
@@ -360,7 +446,6 @@ const SUGGESTION = {
   smoke: '公共区域不吸烟，包括阳台。'
 };
 
-/* 待处理事项总数，用于导航角标 */
 const badge = tab => {
   if (tab === 'life')  return myTasks().filter(t => t.due === '今天').length + lowSupplies().length + S.visitAsks.length;
   if (tab === 'bill')  return myDue().length;

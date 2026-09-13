@@ -257,6 +257,24 @@ main{flex:1;min-width:0}
 .sup.low{border-color:var(--clay-line);box-shadow:var(--shadow),inset 3px 0 0 var(--clay)}
 .sup .owner{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2)}
 .sup .rulenote{font-size:12px;color:var(--ink-3);background:var(--surface-2);border-radius:8px;padding:6px 9px;line-height:1.45}
+/* 来源标签：这条信息是谁、什么时候、怎么产生的 */
+.srctag{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-4);margin-top:6px;line-height:1.45}
+.srctag svg{width:11px;height:11px;flex:none;opacity:.7}
+.srctag + .srctag{margin-top:2px}
+/* 状态型消耗品：只选档位，不数数量 */
+.states{display:flex;gap:5px;flex-wrap:wrap}
+.stbtn{border:1px solid var(--line-2);background:var(--surface);border-radius:8px;padding:5px 10px;
+  font-size:12.5px;color:var(--ink-2);font-weight:500}
+.stbtn:hover{border-color:var(--jade);color:var(--jade-ink)}
+.stbtn[aria-pressed="true"]{background:var(--jade);border-color:var(--jade);color:#fff;font-weight:600}
+/* 报修进度：住户提交 → 机构处理 */
+.timeline{margin-top:9px;border-left:2px solid var(--line);padding-left:12px;display:flex;flex-direction:column;gap:7px}
+.tlrow{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2);position:relative;flex-wrap:wrap}
+.tlrow i{position:absolute;left:-17px;width:8px;height:8px;border-radius:50%;background:var(--ink-4)}
+.tlrow i.member{background:var(--jade)}
+.tlrow i.platform{background:var(--slate)}
+.tlrow em{font-style:normal;color:var(--ink-4);font-size:11.5px;font-variant-numeric:tabular-nums}
+.tlvia{font-size:10.5px;color:var(--ink-4);border:1px solid var(--line);border-radius:5px;padding:0 5px}
 
 /* ============ spaces ============ */
 .spgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:11px}

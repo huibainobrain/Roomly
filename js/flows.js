@@ -39,9 +39,30 @@ function weekdayDate(cn, nextWeek) {
   return d;
 }
 
+const CN_DIGIT = { '零':0,'一':1,'两':2,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10 };
+function cnNum(s) {
+  if (/^\d+$/.test(s)) return parseInt(s);
+  if (s.length === 1) return CN_DIGIT[s] ?? 0;
+  if (s[0] === '十') return 10 + (CN_DIGIT[s[1]] ?? 0);
+  if (s[1] === '十') return (CN_DIGIT[s[0]] ?? 0) * 10 + (CN_DIGIT[s[2]] ?? 0);
+  return CN_DIGIT[s[0]] ?? 0;
+}
+
 function parseButler(raw) {
   const text = (raw || '').trim();
   if (!text) return null;
+
+  /* 先判断是不是在更新库存 —— "只剩两卷"和"买了两卷"是两件完全不同的事 */
+  const hitSupply = S.supplies.find(s => s.kind === 'public' && text.includes(s.name));
+  if (hitSupply && /只剩|还剩|快没|快用完|用完了|没了|不多|剩下/.test(text) && !/买|购/.test(text)) {
+    if (hitSupply.mode === 'count') {
+      const m = text.match(/(\d+|[一二两三四五六七八九十]+)\s*(?:卷|个|瓶|包|条|袋|盒|提|片)/);
+      return { type:'stock', supply:hitSupply, qty: m ? cnNum(m[1]) : Math.max(0, hitSupply.min - 1) };
+    }
+    const state = /用完了|已经没/.test(text) ? '已用完'
+                : /不多/.test(text) ? '不多了' : '快用完';
+    return { type:'stock', supply:hitSupply, state };
+  }
 
   /* 金额：29块9 / 29.9元 / ¥29.9 */
   let amount = 0;
@@ -109,6 +130,29 @@ function butlerSheet(raw) {
         <button class="btn wide" data-act="awkward">有件事不好开口</button>
       </div>
       <div class="acts"><button class="btn" data-act="close">关闭</button></div>`);
+    return;
+  }
+
+  if (p.type === 'stock') {
+    const s = p.supply;
+    S.pending = p;
+    const after = s.mode === 'count' ? `${s.qty} → ${p.qty} ${s.unit}` : `${s.state} → ${p.state}`;
+    const willLow = s.mode === 'count' ? p.qty < s.min : ['快用完','已用完'].includes(p.state);
+    openSheet(`<h3>管家理解成这样</h3>
+      <p class="hint">这会更新公共物品的状态，记在你名下，其他人能看到是谁什么时候更新的。</p>
+      ${understandBox('理解结果', [
+        uline('动作', '更新公共物品'),
+        uline('物品', s.name),
+        uline(s.mode === 'count' ? '数量' : '状态', after),
+        uline('更新人', `${av(ME, 'sm')}${mem(ME).name}`)
+      ])}
+      ${impactBox([
+        `${s.name}的记录更新为 ${s.mode === 'count' ? p.qty + ' ' + s.unit : p.state}`,
+        willLow ? '会低于约定水位，首页出现补充提醒' : '仍在约定水位以上，不会产生提醒',
+        '这次更新会记进家里动态',
+        '不会产生任何费用，除非你之后选择补充并记账'
+      ])}
+      ${acts('doStock', '确认更新')}`);
     return;
   }
 
@@ -443,28 +487,106 @@ function safetySheet() {
 /* ============================================================
    各类登记
    ============================================================ */
+/* 只更新数量/状态，不涉及钱 */
+function setStockSheet(id) {
+  const s = S.supplies.find(x => x.id === id);
+  openSheet(`<h3>更新${s.name}库存</h3>
+    <p class="hint">直接把数字改成你现在看到的数量。这条记录会记在你名下，其他人能看到是谁什么时候更新的。</p>
+    <div class="fld"><label for="sq">当前还有（${s.unit}）</label>
+      <input type="number" id="sq" min="0" value="${s.qty}" inputmode="numeric"></div>
+    <div class="notice">${svg(I.info)}<span>上次更新：${srcNote(s.src)}</span></div>
+    ${acts('doSetStock', '更新')}`);
+  sheetEl().dataset.sid = id;
+}
+
+/* 补充并记账：数量/状态 + 费用一起处理 */
 function restockSheet(id) {
   const s = S.supplies.find(x => x.id === id);
-  const defQty = Math.max(s.min * 2, 4), defAmt = s.name === '厕纸' ? 29.9 : 20;
+  const defQty = s.mode === 'count' ? Math.max(s.min * 2, 4) : 1;
+  const defAmt = s.name === '厕纸' ? 29.9 : 20;
   openSheet(`<h3>补充${s.name}</h3>
     <p class="hint">填了金额，账单里会自动生成一笔对应的公共支出，不用再单独记一次。</p>
-    <div class="fld"><label for="rq">新增数量（${s.unit}）</label><input type="number" id="rq" min="1" value="${defQty}" inputmode="numeric"></div>
+    ${s.mode === 'count'
+      ? `<div class="fld"><label for="rq">新增数量（${s.unit}）</label><input type="number" id="rq" min="1" value="${defQty}" inputmode="numeric"></div>`
+      : `<div class="fld"><label>补充后的状态</label><div class="who-pick" id="rs">
+          ${SUPPLY_STATES.map(v => `<button type="button" data-v="${v}" aria-pressed="${v === '充足'}">${v}</button>`).join('')}</div></div>`}
     <div class="fld"><label for="ra">购买金额（元，留空则只更新库存）</label><input type="number" id="ra" min="0" step="0.01" value="${defAmt}" inputmode="decimal"></div>
     <div class="understand"><div class="uh">分摊预览</div><div class="ub" id="rPrev"></div></div>
     ${acts('doRestock', '确认补充')}`);
   const upd = () => {
-    const q = parseInt(document.getElementById('rq').value) || 0;
     const a = parseFloat(document.getElementById('ra').value) || 0;
+    const q = s.mode === 'count' ? (parseInt(document.getElementById('rq').value) || 0) : 0;
     document.getElementById('rPrev').innerHTML =
-      uline('库存变化', `${s.qty} → ${s.qty + q} ${s.unit}`) +
+      uline(s.mode === 'count' ? '库存变化' : '状态变化',
+            s.mode === 'count' ? `${s.qty} → ${s.qty + q} ${s.unit}`
+                               : `${s.state} → ${sheetEl().querySelector('#rs button[aria-pressed="true"]').dataset.v}`) +
       uline('付款人', `${av(ME, 'sm')}${mem(ME).name}`) +
       uline('参与分摊', living().map(x => av(x.id, 'sm')).join('')) +
       uline('每人承担', a > 0 ? `<span style="color:var(--jade)">${yuan(a / living().length)}</span>` : '不产生费用');
   };
-  upd();
-  document.getElementById('rq').addEventListener('input', upd);
+  if (s.mode === 'count') document.getElementById('rq').addEventListener('input', upd);
+  else sheetEl().querySelectorAll('#rs button').forEach(b => b.addEventListener('click', () => {
+    sheetEl().querySelectorAll('#rs button').forEach(x => x.setAttribute('aria-pressed', 'false'));
+    b.setAttribute('aria-pressed', 'true'); upd();
+  }));
   document.getElementById('ra').addEventListener('input', upd);
+  upd();
   sheetEl().dataset.sid = id;
+}
+
+/* 洗衣机：选时长后才有"使用中"这个状态 */
+function washSheet() {
+  openSheet(`<h3>开始使用洗衣机</h3>
+    <p class="hint">选一个大概时长，其他人就能看到预计什么时候空出来，不用来回敲门问。</p>
+    <div class="opts">
+      <button class="opt" data-act="doWash" data-m="30">快洗　<span style="color:var(--ink-3);font-weight:400">30 分钟</span><span class="ok">${svg(I.check,2.4)}</span></button>
+      <button class="opt" data-act="doWash" data-m="60">标准　<span style="color:var(--ink-3);font-weight:400">60 分钟</span><span class="ok">${svg(I.check,2.4)}</span></button>
+      <button class="opt" data-act="doWash" data-m="90">大件　<span style="color:var(--ink-3);font-weight:400">90 分钟</span><span class="ok">${svg(I.check,2.4)}</span></button>
+    </div>
+    <div class="fld" style="margin-top:13px"><label for="wm">或自定义（分钟）</label>
+      <div style="display:flex;gap:8px"><input type="number" id="wm" min="5" max="240" value="45" inputmode="numeric">
+      <button class="btn" data-act="doWashCustom">确定</button></div></div>
+    <div class="acts"><button class="btn" data-act="close">取消</button></div>`);
+}
+
+/* 报修：住户提交，之后由相寓更新进度 */
+function repairSheet() {
+  openSheet(`<h3>我要报修</h3>
+    <p class="hint">提交后由相寓受理并安排维修，处理进度会同步回来，你不用自己跟进。</p>
+    <div class="fld"><label for="rpp">问题位置</label><select id="rpp">
+      <option>厨房</option><option>卫生间</option><option>门锁</option><option>家电</option><option>其他</option></select></div>
+    <div class="fld"><label for="rpd">问题描述</label><input type="text" id="rpd" placeholder="例如：厨房灯不亮了"></div>
+    ${impactBox(['生成一张报修单，状态为「已提交」', '相寓受理后状态会自动更新', '维修安排会显示在生活页和我的页', '这次提交会记进家里动态'])}
+    ${acts('doRepair', '提交报修')}`);
+}
+
+/* 个人物品：只在需要划清边界时登记 */
+function thingSheet() {
+  openSheet(`<h3>添加我的物品</h3>
+    <p class="hint">不用录入所有东西。只有当这件东西需要说清楚归属或借用方式时，才值得加进来。</p>
+    <div class="fld"><label for="tn">物品名称</label><input type="text" id="tn" placeholder="例如：空气炸锅"></div>
+    <div class="fld"><label>共享方式</label><div class="who-pick" id="tw">
+      <button type="button" data-v="private" aria-pressed="true">不共享</button>
+      <button type="button" data-v="free">可以直接使用</button>
+      <button type="button" data-v="ask">使用前问我</button></div></div>
+    <div class="fld"><label for="tz">放在哪（可留空）</label><input type="text" id="tz" placeholder="例如：厨房储物柜 A 格"></div>
+    ${acts('doThing', '添加')}`);
+  sheetEl().querySelectorAll('#tw button').forEach(b => b.addEventListener('click', () => {
+    sheetEl().querySelectorAll('#tw button').forEach(x => x.setAttribute('aria-pressed', 'false'));
+    b.setAttribute('aria-pressed', 'true');
+  }));
+}
+
+/* 临时任务：不进入固定任务模板 */
+function taskSheet() {
+  openSheet(`<h3>加一个临时任务</h3>
+    <p class="hint">只这一次，不会变成固定任务。固定任务的改动需要全员确认。</p>
+    <div class="fld"><label for="nt">任务内容</label><input type="text" id="nt" placeholder="例如：周六整理阳台"></div>
+    <div class="fld"><label for="nw">负责人</label><select id="nw">${living().map(m =>
+      `<option value="${m.id}" ${m.id === ME ? 'selected' : ''}>${m.name}${m.id === ME ? '（你）' : ''}</option>`).join('')}</select></div>
+    <div class="fld"><label for="nd">时间</label><select id="nd">
+      <option>今天</option><option>本周内</option><option>周日</option></select></div>
+    ${acts('doTask', '添加')}`);
 }
 
 function billSheet() {
@@ -508,28 +630,40 @@ function billSheet() {
 }
 
 function visitSheet(presetOvernight) {
-  const rule = S.rules.find(r => r.id === 'r2');
+  const o = overnightRule();
   openSheet(`<h3>登记一位访客</h3>
-    <p class="hint">普通到访只需要告知。留宿会对照 现在的约定，超过约定不会被禁止，只是先问问大家。</p>
+    <p class="hint">普通到访只需要告知。留宿会对照现在的约定，超过约定不会被禁止，只是先问问大家。</p>
+    <div class="fld"><label for="vh">谁的访客</label><select id="vh">${living().map(m =>
+      `<option value="${m.id}" ${m.id === ME ? 'selected' : ''}>${m.name}${m.id === ME ? '（你）' : ''}</option>`).join('')}</select></div>
     <div class="fld"><label for="vg">访客称呼</label><input type="text" id="vg" value="朋友"></div>
-    <div class="fld"><label for="vw">时间</label><input type="text" id="vw" value="今晚 19:00–22:00"></div>
+    <div class="fld"><label for="vd">日期</label><select id="vd">
+      <option>今天</option><option>明天</option><option>后天</option></select></div>
+    <div class="fld"><label for="vw">到访时间</label><input type="text" id="vw" value="19:00–22:00"></div>
     <div class="fld"><label>是否留宿</label><div class="who-pick" id="vo">
       <button type="button" data-v="0" aria-pressed="${!presetOvernight}">不留宿</button>
       <button type="button" data-v="1" aria-pressed="${!!presetOvernight}">留宿</button></div></div>
+    <div class="fld" id="vnWrap" ${presetOvernight ? '' : 'hidden'}><label for="vn">留宿几晚</label>
+      <input type="number" id="vn" min="1" max="7" value="1" inputmode="numeric"></div>
     <div id="vCheck"></div>
     ${acts('doVisit', '登记')}`);
   const upd = () => {
     const on = sheetEl().querySelector('#vo button[aria-pressed="true"]').dataset.v === '1';
-    const n = S.nights[ME] + 1;
+    const host = document.getElementById('vh').value;
+    const add = on ? (parseInt(document.getElementById('vn').value) || 1) : 0;
+    document.getElementById('vnWrap').hidden = !on;
+    const had = nightsOf(host), n = had + add;
     document.getElementById('vCheck').innerHTML = !on ? `
       <div class="notice">${svg(I.info)}<span>普通到访只需要告知其他室友，不需要征求同意。</span></div>`
-      : n <= 2 ? `
+      : n <= o.limit ? `
       <div class="notice" style="background:var(--jade-soft);color:var(--jade-ink)">${svg(I.check)}<span>
-        按登记记录，这会是本周第 ${n} 晚，符合当前约定：${rule.title}。</span></div>`
+        ${mem(host).name} 本周已登记 ${had} 晚，加上这次共 ${n} 晚，仍在约定的每周 ${o.limit} 晚之内。</span></div>`
       : `<div class="fair"><div class="fh">${svg(I.info)}这次登记会超过现在的约定</div>
-        <p>按登记记录，这会是本周第 ${n} 晚，超过约定的每周 2 晚。这不会被禁止，但建议先征求其他室友的意见。</p></div>`;
+        <p>${mem(host).name} 本周已登记 ${had} 晚，加上这次共 ${n} 晚，超过约定的每周 ${o.limit} 晚。
+           这不会被禁止，但建议先征求其他室友的意见。</p></div>`;
   };
   upd();
+  document.getElementById('vn').addEventListener('input', upd);
+  document.getElementById('vh').addEventListener('change', upd);
   sheetEl().querySelectorAll('#vo button').forEach(b => b.addEventListener('click', () => {
     sheetEl().querySelectorAll('#vo button').forEach(x => x.setAttribute('aria-pressed', 'false'));
     b.setAttribute('aria-pressed', 'true'); upd();
