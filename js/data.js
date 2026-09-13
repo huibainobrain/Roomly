@@ -12,6 +12,9 @@
 
 const TODAY = '9月12日';
 const NOW = '21:05';
+/* 演示日期是 2026 年 9 月 12 日（周六）；生活页的"明天"按这个日历推 */
+const WEEKDAY = '周六';
+const TOMORROW = { date:'9月13日', wd:'周日' };
 
 const HOUSE = {
   name: '望京西园三区 · 503',
@@ -220,13 +223,13 @@ const SEED = {
 
   /* 访客逐条登记，留宿次数由这些记录累计得出 */
   visits: [
-    { id:'v4', host:'alex', guest:'朋友', date:'今天',  time:'19:00–22:00', overnight:false, week:true,
+    { id:'v4', host:'alex', guest:'朋友', guestPhoto:'img/guest-1.jpg', date:'今天',  time:'19:00–22:00', overnight:false, week:true,
       src:{ via:'member', by:'alex', at:'昨天 21:10' } },
-    { id:'v3', host:'alex', guest:'朋友', date:'9月11日', time:'20:30 起', overnight:true, week:true,
+    { id:'v3', host:'alex', guest:'朋友', guestPhoto:'img/guest-1.jpg', date:'9月11日', time:'20:30 起', overnight:true, week:true,
       src:{ via:'member', by:'alex', at:'9月11日 20:05' } },
-    { id:'v2', host:'alex', guest:'朋友', date:'9月10日', time:'21:00 起', overnight:true, week:true,
+    { id:'v2', host:'alex', guest:'朋友', guestPhoto:'img/guest-1.jpg', date:'9月10日', time:'21:00 起', overnight:true, week:true,
       src:{ via:'member', by:'alex', at:'9月10日 20:40' } },
-    { id:'v1', host:'alex', guest:'朋友', date:'9月9日',  time:'20:00 起', overnight:true, week:true,
+    { id:'v1', host:'alex', guest:'朋友', guestPhoto:'img/guest-1.jpg', date:'9月9日',  time:'20:00 起', overnight:true, week:true,
       src:{ via:'member', by:'alex', at:'9月9日 19:30' } }
   ],
   /* 请求原语：借物、换班、额外留宿共用一套生命周期
@@ -322,6 +325,9 @@ try {
 } catch (e) { S = structuredClone(SEED); }
 /* 补齐后来新增的可选字段，老存档也能正常跑 */
 Object.keys(SEED).forEach(k => { if (S[k] === undefined) S[k] = structuredClone(SEED[k]); });
+/* 访客头像是后加的展示字段，老存档里同一条登记按 id 补上 */
+S.visits.forEach(v => { const seed = SEED.visits.find(x => x.id === v.id);
+  if (seed && seed.guestPhoto && !v.guestPhoto) v.guestPhoto = seed.guestPhoto; });
 ME = S.me || 'yiming';
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 const logFeed = (who, text, t) => { S.feed.unshift({ who, text, t: t || '刚刚' }); S.feed = S.feed.slice(0, 10); };

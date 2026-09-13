@@ -191,55 +191,178 @@ function butlerBox() {
 /* ============================================================
    生活
    ============================================================ */
-const LIFE_MODS = [
-  { id:'chore',   name:'值日',     icon:I.chore },
-  { id:'supply',  name:'公共物品', icon:I.box   },
-  { id:'space',   name:'公共空间', icon:I.space },
-  { id:'guest',   name:'访客',     icon:I.guest },
-  { id:'away',    name:'离家',     icon:I.away  },
-  { id:'facility',name:'共享设施', icon:I.wash  }
-];
-
+/* 生活页：接下来几天会发生什么，家里的东西和空间现在怎么样。
+   日程只列已登记或已同步的事；八张卡各自读原有模块的数据，入口仍指向原来的子页面。 */
 function vLife() {
   if (S.sub) return LIFE_VIEWS[S.sub]();
-  const L = S.laundry, rp = openRepairs()[0];
-  const st = {
-    chore:  `${S.tasks.filter(t => !t.done).length} 项待完成 · 你有 ${myTasks().length} 项`,
-    supply: lowSupplies().length ? `${lowSupplies().map(s => s.name).join('、')}需要补充` : '库存都在约定水位以上',
-    space:  S.zoneProposal.confirmed ? '四类家具已分区到人' : `${mem(S.zoneProposal.who).name} 的分区待确认`,
-    guest:  tonightVisits().length ? `今晚 ${mem(tonightVisits()[0].host).name} 有 1 位访客登记` : '今晚没有访客登记',
-    away:   awayMembers().length ? `${awayMembers().map(a => mem(a.who).name).join('、')} 登记离家中` : '没有人登记离家',
-    facility: L.user ? `${mem(L.user).name} 使用中，预计 ${L.endsAt} 结束` : '洗衣机空闲，可以直接用'
+  const L = S.laundry, me = mem(ME);
+  const rp = openRepairs()[0], low = lowSupplies(), away = awayMembers(), inc = incomingMember();
+  const tonight = tonightVisits(), stayReq = inboxRequests().filter(r => r.kind === 'stay');
+  const go = (sub, label) => `<button class="lcgo" data-act="go" data-tab="life" data-sub="${sub}">${label}${svg(I.chev)}</button>`;
+
+  /* ---- 日程条目：自己的任务可以直接勾掉，其他人的只显示状态 ---- */
+  const item = o => `<li class="ag ${o.done ? 'done' : ''} ${o.muted ? 'muted' : ''}">
+    ${o.task && o.task.who === ME && !o.task.done
+      ? `<button class="agm chk" data-act="doneTask" data-id="${o.task.id}" aria-label="完成 ${o.task.task}"></button>`
+      : o.done ? `<span class="agm chk on">${svg(I.check, 2.4)}</span>`
+      : `<span class="agm dot ${o.tone || ''}"></span>`}
+    <div class="agb"><div class="agt">${o.title}</div><div class="ags">${o.sub}</div></div></li>`;
+  const taskSub = t => t.done
+    ? `${mem(t.who).name} · ${(t.doneAt || '').replace('今天 ', '')} 完成`
+    : t.who === ME ? '固定任务，这次轮到你' : `${mem(t.who).name} 负责`;
+
+  const today = [];
+  S.tasks.filter(t => t.due === '今天').sort((a, b) => (a.done - b.done) || (b.who === ME) - (a.who === ME))
+    .forEach(t => today.push({ task:t, done:t.done, title:t.task, sub:taskSub(t) }));
+  tonight.forEach(v => today.push({ tone:'sky', title:`${mem(v.host).name} 有访客`,
+    sub:`${v.time} · ${v.overnight ? '留宿' : '不留宿'}` }));
+  if (L.user) today.push({ tone:'sky', title:`${mem(L.user).name} 在用洗衣机`, sub:`预计 ${L.endsAt} 结束` });
+
+  const tomorrow = S.tasks.filter(t => t.due === TOMORROW.wd && !t.done)
+    .map(t => ({ task:t, title:t.task, sub:taskSub(t) }));
+
+  const next = [];
+  if (rp) next.push({ tone:'peach', title:rp.desc, sub:`${repairState(rp).s} · 相寓` });
+  next.push({ tone:'sage', title:'公区保洁', sub:`${HOUSE.clean.next} · 相寓排期` });
+  /* 负责人登记离家中的任务已暂缓，不算"会发生的事"，留在值日页里 */
+  S.tasks.filter(t => !t.done && !taskPaused(t) && !['今天', TOMORROW.wd].includes(t.due)).forEach(t => next.push({
+    task:t, title:t.task, sub:`${t.due} · ${mem(t.who).name} 负责` }));
+  away.forEach(a => next.push({ tone:'sage', title:`${mem(a.who).name} 回来`, sub:`${a.to} · 本人登记` }));
+  if (inc) next.push({ tone:'peach', title:`${inc.name} 入住 ${inc.room}`, sub:`${inc.joined} · 相寓同步` });
+
+  const col = (title, date, list, empty) => `<div class="agcol">
+    <div class="agh"><b>${title}</b><span>${date}</span></div>
+    <ul>${list.length ? list.map(item).join('') : `<li class="ag none">${empty}</li>`}</ul></div>`;
+
+  /* ---- 家里的东西和空间：每张卡读自己模块的数据 ---- */
+  const supplyRow = s => {
+    const isLowNow = isLow(s), warn = s.mode === 'state' && s.state === '不多了';
+    const v = s.mode === 'count' ? `${isLowNow ? '仅剩' : '还有'} ${s.qty} ${s.unit}` : s.state;
+    return `<li><span>${s.name}</span><b class="${isLowNow ? 'hot' : warn ? 'warm' : ''}">${v}</b></li>`;
   };
-  const flag = { chore: myTasks().filter(t => t.due === '今天').length, supply: lowSupplies().length,
-                 guest: inboxRequests().filter(r => r.kind === 'stay').length, space: S.zoneProposal.confirmed ? 0 : 1, away:0, facility:0 };
-  const tile = id => {
-    const m = LIFE_MODS.find(x => x.id === id);
-    return `<button class="mod" data-act="go" data-tab="life" data-sub="${id}">
-      <span class="mi">${svg(m.icon)}</span>
-      <span><span class="mn">${m.name}${flag[id] ? `<span class="flag">${flag[id]}</span>` : ''}</span>
-      <span class="ms">${st[id]}</span></span></button>`;
-  };
+  const pub = S.supplies.filter(s => s.kind === 'public');
+  const supplyList = [...pub.filter(isLow), ...pub.filter(s => !isLow(s) && s.mode === 'state' && s.state === '不多了'),
+    ...pub.filter(s => !isLow(s) && !(s.mode === 'state' && s.state === '不多了'))].slice(0, 3);
+
+  const guestAv = v => `<span class="av gav" title="${mem(v.host).name}的${v.guest}">${
+    v.guestPhoto ? `<img src="${v.guestPhoto}" alt="" onerror="this.remove()">` : ''}客</span>`;
+  const weekVisits = S.visits.filter(v => v.week);
+  const guests = tonight.length ? tonight : weekVisits.slice(0, 1);
+
+  const lend = S.supplies.filter(s => s.kind === 'lend');
+  const dutyPeople = [...new Set(S.tasks.filter(t => !t.done).map(t => t.who))];
+  const myAway = awayOf(ME);
+  const washAct = !L.user
+    ? `<button class="btn pri sm" data-act="washStart">开始使用</button>`
+    : L.user === ME
+      ? `<button class="btn pri sm" data-act="washDone">${svg(I.check)}我拿好了</button>
+         <button class="btn sm" data-act="washCancel">点错了</button>`
+      : `<button class="btn sm ${L.notifyMe ? '' : 'pri'}" data-act="notifyWash" ${L.notifyMe ? 'disabled' : ''}>${L.notifyMe ? '已设置提醒' : '结束后提醒我'}</button>`;
 
   return `
-    ${head('生活', '这个家此刻的运转状态。每一条都来自某个人的登记，或者相寓的同步。')}
-    <div class="tonight">
-      <div class="tn"><div class="tl">今晚</div>
-        <div class="tv">${tonightVisits().length ? `${mem(tonightVisits()[0].host).name} 有 1 位访客` : '没有访客登记'}</div>
-        <div class="tsub">${tonightVisits().length ? tonightVisits()[0].time + ' · 不留宿' : '有访客请提前登记'}</div></div>
-      <div class="tn"><div class="tl">洗衣机</div>
-        <div class="tv">${L.user ? mem(L.user).name + ' 使用中' : '空闲'}</div>
-        <div class="tsub">${L.user ? '预计 ' + L.endsAt + ' 结束' : '点开可以开始使用'}</div></div>
-      <div class="tn"><div class="tl">下一次公区保洁</div><div class="tv">${HOUSE.clean.next}</div>
-        <div class="tsub">相寓排期</div></div>
-      <div class="tn"><div class="tl">报修</div>
-        <div class="tv">${rp ? rp.desc : '没有进行中的报修'}</div>
-        <div class="tsub">${rp ? repairState(rp).s : '可以在共享设施里提交'}</div></div>
+  <div class="lifetop">
+    <div><h1>生活</h1><p>接下来几天会发生什么，家里的东西和空间现在怎么样。</p></div>
+    <div class="ltme">${av(ME, 'lg')}<span><b>${me.name}</b>和室友一起住的第 ${daysTogether()} 天</span></div>
+  </div>
+
+  <section class="lwelcome">
+    <div class="lw-text">
+      <h2>一起生活，<br>把日子过成自己喜欢的样子。</h2>
+      <p>分享空间，也分享日常里的小确幸。</p>
     </div>
-    ${sec('这几天会发生的', '和人、时间有关')}
-    <div class="mods">${['chore', 'guest', 'facility', 'away'].map(tile).join('')}</div>
-    ${sec('家里的东西和空间', '和物、边界有关')}
-    <div class="mods">${['supply', 'space'].map(tile).join('')}</div>`;
+    ${imgSlot('img/life-welcome.jpg', '待补生活页顶部横幅图<br>餐桌 · 花束 · 马克杯 · 窗边阳光')}
+  </section>
+
+  ${sec('这几天会发生的', '只列已经登记或同步的事', go('chore', '值日安排'))}
+  <section class="agenda">
+    ${col('今天', `${TODAY} ${WEEKDAY}`, today, '今天没有登记的安排')}
+    ${col('明天', `${TOMORROW.date} ${TOMORROW.wd}`, tomorrow, '暂时没有登记的安排')}
+    ${col('接下来', `到 ${inc ? inc.joined : away[0] ? away[0].to : '下周'}`, next, '暂时没有更远的安排')}
+    <div class="agmoment">
+      ${imgSlot('img/life-moment.jpg', '待补活动氛围图<br>沙发 · 绿植 · 暖光')}
+      <div class="agmt"><p>好的日子，是大家一起过出来的。</p>
+        <button class="btn" data-act="newTask">${svg(I.plus)}提一件事</button></div>
+    </div>
+  </section>
+
+  ${sec('家里的东西和空间', '数量和状态都由成员自己更新')}
+  <section class="lcards">
+    <article class="lc sand">
+      <header><span class="lci">${svg(I.box)}</span><h3>公共物品</h3>${low.length ? `<i class="lcflag">${low.length}</i>` : ''}</header>
+      <ul class="lclist">${supplyList.map(supplyRow).join('')}</ul>
+      <footer>${go('supply', '管理公共物品')}</footer>
+    </article>
+
+    <article class="lc sky">
+      <header><span class="lci">${svg(I.guest)}</span><h3>访客</h3>${stayReq.length ? `<i class="lcflag">${stayReq.length}</i>` : ''}</header>
+      <div class="gavs">${guests.map(v => av(v.host, 'lg')).join('')}${guests.map(guestAv).join('')}
+        <button class="av gav add" data-act="newVisit" aria-label="登记访客">${svg(I.plus)}</button></div>
+      <div class="lcbig">${tonight.length ? `${mem(tonight[0].host).name} 今晚有访客` : '今晚没有访客登记'}</div>
+      <div class="lcsub">${tonight.length ? `${tonight[0].time} · ${tonight[0].overnight ? '留宿' : '不留宿'}` : '有朋友来提前说一声就好'}</div>
+      <div class="lcnote">${stayReq.length ? `<b>${stayReq.length} 条留宿请求等你回应</b>` : `本周已登记 ${weekVisits.length} 次到访`}</div>
+      <footer>${go('guest', '访客记录')}</footer>
+    </article>
+
+    <article class="lc sage">
+      <header><span class="lci">${svg(I.wash)}</span><h3>洗衣机</h3></header>
+      <div class="lcbig"><i class="sdot ${L.user ? 'busy' : 'free'}"></i>${L.user ? `${mem(L.user).name} 使用中` : '空闲'}</div>
+      <div class="lcsub">${L.user ? `预计 ${L.endsAt} 结束 · ${L.minutes} 分钟` : '点开始就能用，用完记得点一下'}</div>
+      <div class="lcnote">${L.src ? srcNote(L.src) : '状态来自使用者的登记'}</div>
+      <footer><div class="btnrow">${washAct}</div>${go('facility', '共享设施')}</footer>
+    </article>
+
+    <article class="lc cream">
+      <header><span class="lci">${svg(I.space)}</span><h3>公共空间</h3>${S.zoneProposal.confirmed ? '' : '<i class="lcflag">1</i>'}</header>
+      <ul class="lclist">${S.spaces.map(sp => {
+        const z = sp.zones.find(x => x.o === ME);
+        return `<li><span>${sp.name}</span><b>${z ? '你的 · ' + z.n : '公共'}</b></li>`; }).join('')}</ul>
+      ${S.zoneProposal.confirmed ? '' : `<div class="lcnote warm">${mem(S.zoneProposal.who).name} 的分区待确认</div>`}
+      <footer>${go('space', '查看分区')}</footer>
+    </article>
+
+    <article class="lc cream">
+      <header><span class="lci">${svg(I.away)}</span><h3>在住 / 离家</h3></header>
+      <div class="lcsub">${living().length - away.length} 人在住 · ${away.length} 人登记离家${inc ? ` · ${inc.name} ${inc.joined} 入住` : ''}</div>
+      <div class="lpeople">${MEMBERS.filter(m => !S.movedOut.includes(m.id)).map(m => {
+        const st = statusOf(m.id), a = awayOf(m.id);
+        return `<div class="lp ${st}">${av(m.id, 'xl' + (st === 'in' ? '' : ' out'))}
+          <b>${m.name}${m.me ? '·你' : ''}</b><span>${st === 'away' ? a.to + ' 回' : st === 'incoming' ? m.joined + ' 入住' : STATUS_TEXT[st]}</span></div>`; }).join('')}</div>
+      <footer>${myAway
+        ? `<button class="btn sm" data-act="cancelAway" data-id="${myAway.id}">我提前回来了</button>`
+        : `<button class="btn sm" data-act="newAway">登记我的离家</button>`}${go('away', '详情')}</footer>
+    </article>
+
+    <article class="lc sand">
+      <header><span class="lci">${svg(I.tool)}</span><h3>可借的东西</h3></header>
+      <ul class="lclist lend">${lend.map(s => `<li>${av(s.owner, 'sm')}<span>${s.name}<em>${s.rule}</em></span>
+        ${s.owner === ME ? '<b>你的</b>' : `<button class="btn sm" data-act="borrow" data-id="${s.id}">${s.rule.startsWith('可直接') ? '登记借用' : '问一声'}</button>`}</li>`).join('')}</ul>
+      <footer>${go('supply', '全部物品')}</footer>
+    </article>
+
+    <article class="lc sage">
+      <header><span class="lci">${svg(I.chore)}</span><h3>清洁安排</h3></header>
+      <div class="lcbig">下次公区保洁 ${HOUSE.clean.next}</div>
+      <div class="lcsub">${srcNote(HOUSE.clean.src)}</div>
+      <div class="lcnote"><span class="avs">${dutyPeople.map(id => av(id, 'sm')).join('')}</span>
+        这周值日 ${S.tasks.filter(t => !t.done).length} 项待完成，你有 ${myTasks().length} 项</div>
+      <footer>${go('chore', '查看排班')}</footer>
+    </article>
+
+    <article class="lc peach">
+      <header><span class="lci">${svg(I.phone)}</span><h3>房屋服务</h3></header>
+      <ul class="lclist svc">
+        <li><span>${svg(I.tool)}</span><span>报修<em>${rp ? `${rp.desc} · ${repairState(rp).s}` : '没有进行中的报修'}</em></span></li>
+        <li><span>${svg(I.phone)}</span><span>${HOUSE.steward}<em>${HOUSE.org.split(' · ')[0]} · 居住问题可以请管家协调</em></span></li>
+      </ul>
+      <footer><button class="btn sm" data-act="newRepair">${svg(I.plus)}我要报修</button>${go('facility', '报修记录')}</footer>
+    </article>
+  </section>
+
+  <section class="lband">
+    ${imgSlot('img/life-band.jpg', '待补底部横幅图<br>绿植 · 猫 · 沙发一角 · 柔和光线')}
+    <div class="lbt"><p>生活不只是住在一起，更是和不同的人，一起把日子过舒服。</p>
+      <button class="btn" data-act="awkward">有件事不好开口</button></div>
+  </section>`;
 }
 
 /* ---------- 值日 ---------- */

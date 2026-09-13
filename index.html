@@ -304,6 +304,155 @@ main{flex:1;min-width:0}
   .mood .mbody{padding:18px 20px 20px}
 }
 
+/* ============================================================
+   生活页
+   顶部一行身份 → 欢迎横幅 → 三栏日程 + 一张氛围卡 → 八张模块卡 → 底部横幅。
+   模块卡按内容分四种底色，不再是八个一样的白框；照片类区域用 .ph 预留。
+   ============================================================ */
+.lifetop{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:16px}
+.lifetop h1{font-size:24px;font-weight:600;color:var(--sage-deep)}
+.lifetop p{font-size:13.5px;color:var(--ink-3);margin-top:2px}
+.ltme{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);
+  border-radius:999px;padding:5px 15px 5px 5px;box-shadow:var(--shadow);font-size:12px;color:var(--ink-3);flex:none}
+.ltme b{display:block;font-family:var(--f-d);font-size:13.5px;color:var(--ink);font-weight:600;line-height:1.2}
+
+/* ---- 欢迎横幅：文字在左、氛围图在右 ---- */
+.lwelcome{display:grid;grid-template-columns:minmax(300px,1fr) 1.25fr;align-items:stretch;
+  background:linear-gradient(115deg,var(--sage-soft),var(--cream) 75%);border:1px solid var(--sage-line);
+  border-radius:24px;overflow:hidden;margin-bottom:4px}
+.lw-text{padding:26px 30px;display:flex;flex-direction:column;justify-content:center;gap:8px}
+.lw-text h2{font-size:24px;font-weight:600;line-height:1.35;color:var(--sage-deep)}
+.lw-text p{font-size:14px;color:var(--ink-2)}
+.lwelcome .ph{border:0;border-radius:0;aspect-ratio:auto;min-height:152px;background:var(--sand-2)}
+.lwelcome .ph img{object-position:60% 55%}
+
+/* ---- 日程：今天 / 明天 / 接下来 三栏，加一张氛围卡 ---- */
+.agenda{display:grid;grid-template-columns:1fr 1fr 1fr .92fr;gap:12px;align-items:stretch}
+.agcol{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:16px 16px 10px;box-shadow:var(--shadow)}
+.agcol:first-child{background:var(--cream);border-color:var(--sand-2)}
+.agh{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px}
+.agh b{font-family:var(--f-d);font-size:16px;font-weight:600}
+.agh span{font-size:12px;color:var(--ink-3)}
+.agcol ul{list-style:none;margin:0;padding:0}
+.ag{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px dashed var(--line)}
+.ag:first-child{border-top:0}
+.agm{width:18px;height:18px;flex:none;margin-top:2px;border-radius:50%;display:grid;place-items:center}
+.agm.chk{border:1.5px solid var(--line-2);background:var(--surface);cursor:pointer;padding:0}
+.agm.chk:hover{border-color:var(--sage)}
+.agm.chk.on{background:var(--sage);border-color:var(--sage);color:#fff}
+.agm.chk.on svg{width:11px;height:11px}
+.agm.dot::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--ink-4)}
+.agm.dot.sky::before{background:var(--sky)}
+.agm.dot.sage::before{background:var(--sage)}
+.agm.dot.peach::before{background:var(--peach)}
+.agb{min-width:0}
+.agt{font-family:var(--f-d);font-size:13.5px;font-weight:600;line-height:1.35}
+.ags{font-size:12px;color:var(--ink-3);margin-top:1px;line-height:1.45}
+.ag.done .agt{color:var(--ink-3);text-decoration:line-through;text-decoration-color:var(--ink-4)}
+.ag.muted{opacity:.6}
+.ag.none{color:var(--ink-4);font-size:12.5px;padding:10px 0}
+
+/* 氛围卡：照片做底，文案和按钮压在下沿；没图时按主题色显示 */
+.agmoment{position:relative;border-radius:20px;overflow:hidden;background:var(--sand);border:1px solid var(--sand-2);
+  min-height:220px;display:flex;align-items:flex-end}
+.agmoment .ph{position:absolute;inset:0;border:0;border-radius:0;aspect-ratio:auto;min-height:0}
+.agmoment .ph figcaption{position:absolute;top:14px;left:0;right:0}
+.agmt{position:relative;z-index:1;padding:14px 16px 16px;width:100%;color:var(--sage-deep)}
+.agmt p{font-family:var(--f-d);font-size:14.5px;font-weight:600;line-height:1.5;margin-bottom:10px;color:inherit}
+.agmt .btn{background:var(--surface);border-color:transparent;box-shadow:var(--shadow)}
+.agmoment:has(.ph.ok) .agmt{background:linear-gradient(180deg,transparent,rgba(252,248,241,.94) 42%);color:#3D6B52}
+.agmoment:has(.ph.ok) .agmt .btn{background:#fff;color:#3D6B52}
+
+/* ---- 八张模块卡：四种底色分组，不是八个一样的白框 ---- */
+.lcards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.lc{border-radius:20px;padding:15px 16px 13px;display:flex;flex-direction:column;gap:7px;border:1px solid transparent;min-height:190px}
+.lc.cream{background:var(--surface);border-color:var(--line);box-shadow:var(--shadow)}
+.lc.sand{background:var(--cream);border-color:var(--sand-2)}
+.lc.sage{background:var(--sage-soft);border-color:var(--sage-line)}
+.lc.sky{background:var(--sky-soft);border-color:color-mix(in srgb,var(--sky) 32%,transparent)}
+.lc.peach{background:var(--peach-soft);border-color:color-mix(in srgb,var(--peach) 28%,transparent)}
+.lc header{display:flex;align-items:center;gap:9px}
+.lc header h3{font-size:15px;font-weight:600;flex:1}
+.lci{width:34px;height:34px;border-radius:12px;background:var(--surface);display:grid;place-items:center;color:var(--ink-2);flex:none;box-shadow:var(--shadow)}
+.lci svg{width:17px;height:17px}
+.lc.sage .lci{color:var(--sage-deep)} .lc.sky .lci{color:var(--sky)}
+.lc.peach .lci,.lc.sand .lci{color:var(--peach)}
+.lcflag{min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--rose);color:#fff;font-size:10.5px;
+  font-weight:700;font-style:normal;display:grid;place-items:center;font-family:var(--f-d)}
+.lclist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.lclist li{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px;padding:6px 0;border-top:1px dashed var(--line)}
+.lclist li:first-child{border-top:0}
+.lclist li>span:not(.av):first-child{color:var(--ink-2)}
+.lclist b{font-weight:600;font-family:var(--f-d);color:var(--ink)}
+.lclist b.hot{color:var(--rose)} .lclist b.warm{color:var(--peach)}
+.lclist.lend li{justify-content:flex-start}
+.lclist.lend li>span:not(.av){flex:1;min-width:0;display:flex;flex-direction:column;color:var(--ink);font-weight:600;font-family:var(--f-d)}
+.lclist.lend em,.lclist.svc em{font-style:normal;font-size:11.5px;color:var(--ink-3);font-weight:400;font-family:var(--f-b);display:block;line-height:1.4}
+.lclist.lend b{font-size:12px;color:var(--ink-3);font-weight:500}
+.lclist.svc li{justify-content:flex-start;align-items:flex-start}
+.lclist.svc li>span:first-child{width:28px;height:28px;border-radius:9px;background:var(--surface);display:grid;place-items:center;color:var(--peach);flex:none;margin-top:1px}
+.lclist.svc li>span:first-child svg{width:14px;height:14px}
+.lclist.svc li>span:last-child{font-weight:600;font-family:var(--f-d);color:var(--ink);min-width:0}
+.lcbig{font-family:var(--f-d);font-size:16px;font-weight:600;display:flex;align-items:center;gap:7px;line-height:1.3}
+.lcsub{font-size:12.5px;color:var(--ink-2);line-height:1.45}
+.lcnote{font-size:12px;color:var(--ink-3);display:flex;align-items:center;gap:6px;line-height:1.4}
+.lcnote b{color:var(--peach);font-weight:600}
+.lcnote.warm{color:var(--peach);font-weight:500}
+.lcnote .avs{display:inline-flex;flex:none}
+.lcnote .avs .av{margin-left:-5px;box-shadow:0 0 0 2px var(--sage-soft)}
+.lcnote .avs .av:first-child{margin-left:0}
+.lc footer{margin-top:auto;padding-top:8px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.lc footer .btnrow{margin:0}
+.lcgo{margin-left:auto;display:inline-flex;align-items:center;gap:1px;background:none;border:0;padding:4px 0;
+  font-size:12.5px;color:var(--sage-deep);font-weight:600;white-space:nowrap}
+.lcgo svg{width:14px;height:14px}
+.lcgo:hover{text-decoration:underline}
+.sechead .lcgo{margin-left:0}
+.sdot.in,.sdot.free{background:var(--sage)}
+.sdot.busy{background:var(--sky)}
+
+/* 访客头像行：主人是成员头像，访客是预留的图片位，最后一个是登记入口 */
+.gavs{display:flex;align-items:center;margin:2px 0 4px}
+.gavs .av{margin-left:-8px;box-shadow:0 0 0 2px var(--sky-soft)}
+.gavs .av:first-child{margin-left:0}
+.av.gav{width:34px;height:34px;font-size:12px;background:var(--sand-2);color:var(--ink-3)}
+.av.gav.add{border:1.5px dashed var(--line-2);background:var(--surface);color:var(--ink-3);cursor:pointer;padding:0}
+.av.gav.add svg{width:14px;height:14px}
+.av.gav.add:hover{border-color:var(--sage);color:var(--sage-deep)}
+
+/* 在住 / 离家 的成员一行 */
+.lpeople{display:flex;gap:2px;flex-wrap:wrap;margin:2px 0}
+.lp{flex:1;min-width:56px;display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center}
+.lp b{font-family:var(--f-d);font-size:12px;font-weight:600;line-height:1.2}
+.lp span{font-size:10.5px;color:var(--ink-3);white-space:nowrap}
+.lp.away span,.lp.incoming span{color:var(--peach)}
+
+/* ---- 底部横幅：文案在左、入口在右，照片做底 ---- */
+.lband{position:relative;margin-top:18px;border-radius:22px;overflow:hidden;border:1px solid var(--sand-2);background:var(--sand)}
+.lband .ph{border:0;border-radius:0;aspect-ratio:auto;min-height:132px}
+.lband .ph figcaption{position:absolute;top:12px;left:0;right:0}
+.lband .lbt{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 28px}
+.lband .lbt p{font-family:var(--f-d);font-size:16.5px;font-weight:600;color:var(--sage-deep);max-width:34ch;line-height:1.5}
+.lband .lbt .btn{background:var(--surface);border-color:transparent;box-shadow:var(--shadow);flex:none}
+.lband:has(.ph.ok) .lbt p{color:#3D6B52;text-shadow:0 1px 14px rgba(252,248,241,.9)}
+.lband:has(.ph.ok) .lbt .btn{background:#fff;color:#3D6B52}
+
+@media (max-width:1080px){
+  .agenda{grid-template-columns:1fr 1fr}
+  .lcards{grid-template-columns:1fr 1fr}
+  .lwelcome{grid-template-columns:1fr}
+  .lwelcome .ph{min-height:150px;order:-1}
+  .lw-text{padding:20px 22px}
+  .lw-text h2{font-size:21px}
+}
+@media (max-width:560px){
+  .agenda,.lcards{grid-template-columns:1fr}
+  .agmoment{min-height:190px}
+  .lifetop .ltme{display:none}  /* 移动端顶栏已有头像，不再重复 */
+  .lband .ph{min-height:172px}
+  .lband .lbt{flex-direction:column;align-items:flex-start;justify-content:center;padding:18px 20px;gap:12px}
+}
+
 /* ============ 「不好开口」流程里的示例按钮 ============ */
 .bq{border:1px solid var(--line);background:var(--surface-2);border-radius:18px;padding:4px 11px;font-size:12.5px;color:var(--ink-2)}
 .bq:hover{border-color:var(--jade-line);background:var(--jade-soft);color:var(--jade-ink)}
@@ -373,11 +522,6 @@ main{flex:1;min-width:0}
 .mod .ms{font-size:12.5px;color:var(--ink-3);margin-top:2px;line-height:1.45}
 .mod .flag{min-width:17px;height:17px;padding:0 5px;border-radius:9px;background:var(--clay);color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center;font-family:var(--f-d)}
 
-.tonight{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:18px}
-.tn{background:var(--surface);padding:12px 14px}
-.tn .tl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
-.tn .tv{font-family:var(--f-d);font-size:14.5px;font-weight:600;margin-top:3px;display:flex;align-items:center;gap:6px;line-height:1.35}
-.tn .tsub{font-size:11.5px;color:var(--ink-3);margin-top:1px}
 
 /* ============ supplies ============ */
 .segbar{display:inline-flex;background:var(--surface-2);border-radius:10px;padding:3px;gap:2px;margin-bottom:14px;border:1px solid var(--line);flex-wrap:wrap}
@@ -602,9 +746,8 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--jade);outline-of
   .row .cta{width:100%;margin-top:4px}
   .row .cta .btn{flex:1}
   .toast{bottom:86px}
-  .tonight{grid-template-columns:1fr 1fr}
 }
-@media (max-width:430px){ .mods{grid-template-columns:1fr} .tonight{grid-template-columns:1fr} }
+@media (max-width:430px){ .mods{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
