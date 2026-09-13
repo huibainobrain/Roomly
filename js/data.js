@@ -50,21 +50,25 @@ const PREF_KEYS = [
 /* 成员的租约信息来自机构，生活偏好来自本人填写的入住共识 */
 const MEMBERS = [
   { id:'yiming', name:'Yiming', short:'YM', c:'#2A7059', room:'02室', me:true, joined:'6月1日',
+    photo:'img/avatar-yiming.png',
     lease:{ via:'platform', at:'6月1日' },
     prefs:{ quiet:'23:30', visitor:'提前说一声', overnight:'每周 ≤2 晚', kitchen:'台面擦净，锅具当天洗',
             supply:'统一采购 AA', temp:'25°C', smoke:'家里都不吸',
             sleep:'23:45 左右', social:'礼貌互不打扰', conflict:'系统先中立提醒', cook:'偶尔做饭', pet:'不养，可以接受' } },
   { id:'alex', name:'Alex', short:'AX', c:'#A3651E', room:'01室', joined:'4月15日',
+    photo:'img/avatar-alex.png',
     lease:{ via:'platform', at:'4月15日' },
     prefs:{ quiet:'23:30', visitor:'提前说一声', overnight:'不限', kitchen:'台面擦净，锅具当天洗',
             supply:'统一采购 AA', temp:'25°C', smoke:'家里都不吸',
             sleep:'00:30 左右', social:'偶尔一起聊天吃饭', conflict:'私下直接说', cook:'经常做饭', pet:'不养，可以接受' } },
   { id:'tom', name:'Tom', short:'TM', c:'#3F5F80', room:'03室', joined:'3月1日',
+    photo:'img/avatar-tom.png',
     lease:{ via:'platform', at:'3月1日' },
     prefs:{ quiet:'23:30', visitor:'提前说一声', overnight:'每周 ≤1 晚', kitchen:'台面擦净，锅具当天洗',
             supply:'统一采购 AA', temp:'26°C', smoke:'家里都不吸',
             sleep:'23:00 左右', social:'礼貌互不打扰', conflict:'系统先中立提醒', cook:'几乎不做饭', pet:'不养，可以接受' } },
   { id:'lin', name:'Lin', short:'LN', c:'#6B4A6E', room:'04室', incoming:true, joined:'9月20日',
+    photo:'img/avatar-lin.png',
     lease:{ via:'platform', at:'9月8日' },
     prefsSrc:{ via:'member', by:'lin', at:'9月10日' },
     prefs:{ quiet:'23:30', visitor:'提前说一声', overnight:'不限', kitchen:'台面擦净，锅具当天洗',
@@ -123,7 +127,8 @@ const svg = (p, w) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 const av = (id, cls = '') => {
   const m = mem(id);
   const ghost = m.incoming || S.movedOut.includes(id);
-  return `<span class="av ${cls} ${id===ME?'me':''} ${ghost?'ghost':''}" ${ghost?'':`style="background:${m.c}"`} title="${m.name}">${m.short}</span>`;
+  return `<span class="av ${cls} ${id===ME?'me':''} ${ghost?'ghost':''}" ${ghost?'':`style="background:${m.c}"`} title="${m.name}">${
+    m.photo ? `<img src="${m.photo}" alt="" onerror="this.remove()">` : ''}${m.short}</span>`;
 };
 const yuan = n => {
   const v = Math.round(n * 100) / 100;

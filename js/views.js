@@ -43,104 +43,147 @@ const srcTag = (s, cls) => s ? `<span class="srctag ${cls || ''}">${svg(I.info)}
 /* ============================================================
    首页
    ============================================================ */
+/* 图片位：缺图时 <img> 自行移除，露出占位说明，尺寸由 CSS 固定 */
+const imgSlot = (src, label) =>
+  `<figure class="ph"><img src="${src}" alt="" onerror="this.remove()"><figcaption>${label}</figcaption></figure>`;
+
 function vHome() {
+  /* ---- 业务数据与原来完全一致 ---- */
   const watch = [];
   if (lowSupplies().length) watch.push('公共物品库存');
   const revisit = rulesToRevisit();
   if (revisit.length) watch.push('新室友约定确认');
-
   const calm = watch.length === 0;
   const awayN = awayMembers().length;
-  const hero = `
-    <section class="hero ${calm ? 'calm' : 'watch'}">
-      <div class="hl">今天，家里怎么样</div>
-      <h1 class="ht">${calm ? '一切正常，没有需要协调的事' : `有 ${watch.length} 件事值得留意`}</h1>
-      ${watch.length ? `<div class="htags">${watch.map(w => `<span>${w}</span>`).join('')}</div>` : ''}
-      <div class="glance">
-        <span class="gl">${svg(I.home)}${living().length} 位成员${awayN ? ` · ${awayN} 位登记离家` : ''}</span>
-        <span class="gl">${svg(I.guest)}今晚 ${tonightVisits().length} 位访客登记</span>
-        <span class="gl">${svg(I.chore)}${myTasks().filter(t => t.due === '今天').length} 项任务待完成</span>
-        <span class="gl">${svg(I.talk)}${revisit.length} 条约定待确认</span>
-      </div>
-    </section>`;
+  const me = mem(ME);
 
-  const strip = `<div class="whobar">${MEMBERS.filter(m => !S.movedOut.includes(m.id)).map(m => {
-    const st = statusOf(m.id);
-    const a = awayOf(m.id);
-    const tail = st === 'away' ? `${a.to}回` : st === 'incoming' ? `${m.joined}入住` : m.room;
-    return `<span class="who ${st}">${av(m.id, 'sm' + (st === 'in' ? '' : ' out'))}
-      <b>${m.name}${m.me ? '·你' : ''}</b><i class="sdot ${st}"></i>${tail}</span>`;
-  }).join('')}</div>`;
-
+  /* ---- 今日待办 ---- */
   const todos = [];
   const t = S.tasks.find(x => x.who === ME && x.due === '今天' && !x.done);
-  if (t) todos.push(`<div class="todo a"><span class="ic">${svg(I.chore)}</span><div class="bd">
-      <div class="k">今天的值日</div><div class="t">${t.task}</div>
-      <div class="m">按固定任务安排，今天轮到你</div>
-      <div class="act">
-        <button class="btn pri sm" data-act="doneTask" data-id="${t.id}">${svg(I.check)}完成</button>
-        <button class="btn sm" data-act="deferTask" data-id="${t.id}">今天做不了</button>
-      </div></div></div>`);
+  if (t) todos.push(`<div class="tcard a"><span class="tic">${svg(I.chore)}</span>
+      <div><div class="tt">${t.task}</div><div class="ts">按固定任务安排，今天轮到你</div></div>
+      <div class="tb"><button class="btn pri sm" data-act="doneTask" data-id="${t.id}">${svg(I.check)}完成</button>
+        <button class="btn sm" data-act="deferTask" data-id="${t.id}">今天做不了</button></div></div>`);
 
-  if (myDue().length) todos.push(`<div class="todo b"><span class="ic">${svg(I.bill)}</span><div class="bd">
-      <div class="k">待结算</div><div class="t">你还需支付 ${yuan(myDueTotal())}</div>
-      <div class="m">${myDue().map(b => b.title).join(' · ')}</div>
-      <div class="act"><button class="btn sm" data-act="go" data-tab="bill">去结算</button></div>
-    </div></div>`);
-
-  if (revisit.length) todos.push(`<div class="todo d"><span class="ic">${svg(I.talk)}</span><div class="bd">
-      <div class="k">新室友</div><div class="t">${incomingMember().name} 入住后有 ${revisit.length} 项约定需要重新确认</div>
-      <div class="m">${revisit.map(r => r.rule.title).join(' · ')}</div>
-      <div class="act"><button class="btn pri sm" data-act="go" data-tab="talk" data-sub="lin">参与讨论</button></div>
-    </div></div>`);
+  if (myDue().length) todos.push(`<div class="tcard b"><span class="tic">${svg(I.bill)}</span>
+      <div><div class="tt">待支付 ${yuan(myDueTotal())}</div>
+      <div class="ts">${myDue().map(b => b.title).join(' · ')}</div></div>
+      <div class="tb"><button class="btn pri sm" data-act="go" data-tab="bill">去结算</button></div></div>`);
 
   const inbox = inboxRequests();
-  if (inbox.length) todos.push(`<div class="todo d"><span class="ic">${svg(I.guest)}</span><div class="bd">
-      <div class="k">等你回应</div><div class="t">${mem(inbox[0].from).name}：${inbox[0].subject}</div>
-      <div class="m">${inbox[0].detail}</div>
-      <div class="act">
-        <button class="btn pri sm" data-act="reqAgree" data-id="${inbox[0].id}">可以</button>
-        <button class="btn sm" data-act="reqDecline" data-id="${inbox[0].id}">这次不太方便</button>
-      </div></div></div>`);
+  if (inbox.length) todos.push(`<div class="tcard d"><span class="tic">${svg(I.guest)}</span>
+      <div><div class="tt">${mem(inbox[0].from).name}：${inbox[0].subject}</div>
+      <div class="ts">${inbox[0].detail}</div></div>
+      <div class="tb"><button class="btn pri sm" data-act="reqAgree" data-id="${inbox[0].id}">可以</button>
+        <button class="btn sm" data-act="reqDecline" data-id="${inbox[0].id}">不太方便</button></div></div>`);
+
+  if (revisit.length) todos.push(`<div class="tcard c"><span class="tic">${svg(I.talk)}</span>
+      <div><div class="tt">${incomingMember().name} 入住前有 ${revisit.length} 件事待确认</div>
+      <div class="ts">${revisit.map(r => r.rule.title).join(' · ')}</div></div>
+      <div class="tb"><button class="btn pri sm" data-act="go" data-tab="talk" data-sub="lin">去查看</button></div></div>`);
 
   const low = lowSupplies()[0];
-  if (low && todos.length < 4) todos.push(`<div class="todo c"><span class="ic">${svg(I.box)}</span><div class="bd">
-      <div class="k">公共物品</div><div class="t">${low.name}${low.mode === 'count' ? `只剩 ${low.qty} ${low.unit}` : low.state}</div>
-      <div class="m">${srcNote(low.src)}更新 · ${low.mode === 'count' ? `低于约定的 ${low.min} ${low.unit}` : '需要补充了'}</div>
-      <div class="act"><button class="btn pri sm" data-act="restock" data-id="${low.id}">去补充</button></div>
-    </div></div>`);
+  if (low && todos.length < 4) todos.push(`<div class="tcard c"><span class="tic">${svg(I.box)}</span>
+      <div><div class="tt">${low.name}${low.mode === 'count' ? `只剩 ${low.qty} ${low.unit}` : low.state}</div>
+      <div class="ts">${srcNote(low.src)}更新</div></div>
+      <div class="tb"><button class="btn pri sm" data-act="restock" data-id="${low.id}">去补充</button></div></div>`);
 
-  const todoBlock = todos.length
-    ? `<div class="todos">${todos.slice(0, 4).join('')}</div>`
-    : `<div class="card empty">今天没有需要你处理的事。<br>有新情况时，管家会主动提醒你。</div>`;
+  /* ---- 成员一行 ---- */
+  const people = MEMBERS.filter(m => !S.movedOut.includes(m.id)).map(m => {
+    const st = statusOf(m.id), a = awayOf(m.id);
+    const tail = st === 'away' ? `${a.to} 回` : st === 'incoming' ? `${m.joined} 入住` : STATUS_TEXT[st];
+    return `<div class="person ${m.me ? 'me' : ''}">
+      ${av(m.id, 'xxl' + (st === 'in' ? '' : ' out'))}
+      <div class="pn">${m.name}${m.me ? '·你' : ''}</div>
+      <div class="pr">${m.room}</div>
+      <div class="pst"><i class="sdot ${st}"></i>${tail}</div></div>`;
+  }).join('');
 
   return `
-    ${strip}
-    ${hero}
-    ${sec('今天需要你处理', todos.length ? `${Math.min(todos.length,4)} 件` : '')}
-    ${todoBlock}
-    ${sec('跟管家说一句')}
-    ${butlerBox()}
-    ${sec('家里动态', '由大家的操作和相寓同步自动生成，不能手动发布')}
-    <ul class="feed bare">${S.feed.map(f => `<li>
-      ${f.who === 'sys'
-        ? `<span class="sysic">${svg(I.spark)}</span><span class="tx"><b>合租管家</b> ${f.text}</span>`
-        : `${av(f.who)}<span class="tx"><b>${mem(f.who).name}</b> ${f.text}</span>`}
-      <span class="tm">${f.t}</span></li>`).join('')}</ul>`;
+  <section class="welcome">
+    <div class="wl-text">
+      <h1>${greet()}，${me.name}</h1>
+      <p>新的一天，从一个整洁、温暖的家开始。</p>
+      <div class="wl-meta">${HOUSE.name} · 和室友一起住的第 ${daysTogether()} 天</div>
+    </div>
+    ${imgSlot('img/home-welcome.png', '待补欢迎横幅氛围图<br>窗边阳光 · 绿植 · 桌椅')}
+  </section>
+
+  <div class="hgrid">
+    <section class="place">
+      <div class="ptop"><h2>${HOUSE.name}</h2></div>
+      <div class="pmeta">
+        <span>${svg(I.me)}${living().length} 位成员${awayN ? ` · ${awayN} 位登记离家` : ''}</span>
+        <span>${svg(I.home)}${HOUSE.org}</span>
+        <span>${svg(I.clock)}下一次保洁 ${HOUSE.clean.next}</span>
+      </div>
+      <div class="people">${people}</div>
+    </section>
+
+    <section class="mood">
+      ${imgSlot('img/home-mood.png', '待补首页主视觉<br>沙发 · 猫 · 绿植 · 午后光线')}
+      <div class="mbody">
+        <div class="ml">今天，家里怎么样</div>
+        <h2>${calm ? '一切正常，没有需要协调的事' : `有 ${watch.length} 件事值得留意`}</h2>
+        ${watch.length ? `<div class="mtags">${watch.map(w => `<span>${w}</span>`).join('')}</div>` : ''}
+        <div class="mglance">
+          <span>${svg(I.guest)}今晚 ${tonightVisits().length} 位访客登记</span>
+          <span>${svg(I.chore)}${myTasks().filter(x => x.due === '今天').length} 项任务待完成</span>
+          <span>${svg(I.talk)}${revisit.length} 条约定待确认</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="hgrid2">
+    <div>
+      ${sec('今日待办', todos.length ? `${Math.min(todos.length, 4)} 件` : '')}
+      ${todos.length ? `<div class="todos">${todos.slice(0, 4).join('')}</div>`
+        : '<div class="card empty">今天没有需要你处理的事。有新情况时，管家会主动提醒你。</div>'}
+      ${butlerBox()}
+    </div>
+    <aside>
+      ${sec('家里动态', '自动生成')}
+      <ul class="stream">${S.feed.map(f => `<li>
+        ${f.who === 'sys'
+          ? `<span class="sic">${svg(I.spark)}</span>`
+          : av(f.who, 'lg')}
+        <span class="stx">${f.who === 'sys' ? '<b>合租管家</b> ' : `<b>${mem(f.who).name}</b> `}${f.text}
+          <div class="stm">${f.t}</div></span></li>`).join('')}</ul>
+    </aside>
+  </div>
+
+  <section class="lifeband">
+    ${imgSlot('img/home-lifeband.png', '待补底部生活方式横幅<br>绿植 · 柔和光线 · 生活场景')}
+    <div class="lbtext"><p>生活不一定完美，但一个互相体谅的家，可以很美。</p></div>
+  </section>`;
+}
+
+/* 问候语随时间变化，NOW 是演示时钟 */
+function greet() {
+  const h = parseInt(NOW.split(':')[0], 10);
+  return h < 11 ? '早上好' : h < 14 ? '中午好' : h < 18 ? '下午好' : '晚上好';
+}
+/* 从当前用户入住那天算到今天，只用已有的租约数据 */
+function daysTogether() {
+  const m = mem(ME).joined.match(/(\d+)月(\d+)日/);
+  if (!m) return 0;
+  const from = new Date(2026, +m[1] - 1, +m[2]);
+  return Math.max(1, Math.round((new Date(2026, 8, 12) - from) / 86400000));
 }
 
 function butlerBox() {
-  return `<div class="butler">
-    <div class="bh"><span class="bi">${svg(I.spark)}</span><b>跟管家说一句</b><span>先理解，再确认，最后才执行</span></div>
-    <div class="binput">
-      <input type="text" id="butlerIn" placeholder="例如：厕纸好像只剩两卷了" aria-label="跟管家说一句">
-      <button class="btn pri" data-act="butlerGo">说给管家</button>
+  return `<div class="butler2">
+    <div class="b2h"><span class="b2i">${svg(I.spark)}</span>
+      <span><b>跟管家说一句</b><span>用平常说话的方式就行，管家会先理解、再让你确认</span></span></div>
+    <div class="b2in">
+      <input type="text" id="butlerIn" placeholder="比如：厕纸好像只剩两卷了" aria-label="跟管家说一句">
+      <button data-act="butlerGo" aria-label="发送">${svg(I.arrow)}</button>
     </div>
-    <div class="bquick">
-      <button class="bq" data-act="butlerFill" data-text="厕纸好像只剩两卷了">更新公共用品</button>
-      <button class="bq" data-act="butlerFill" data-text="我刚买了29块9的厕纸，12卷，三个人平分">我买了公共用品</button>
-      <button class="bq" data-act="butlerFill" data-text="我下周三到周日回老家">我要离开几天</button>
-      <button class="bq" data-act="awkward">有件事不好开口</button>
+    <div class="b2q">
+      <button data-act="butlerFill" data-text="我刚买了29块9的厕纸，12卷，三个人平分">${svg(I.box)}我买了公共用品</button>
+      <button data-act="butlerFill" data-text="我下周三到周日回老家">${svg(I.away)}我要离开几天</button>
+      <button data-act="awkward">${svg(I.talk)}有件事不好开口</button>
     </div>
   </div>`;
 }

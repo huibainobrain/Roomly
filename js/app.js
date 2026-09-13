@@ -9,6 +9,8 @@ const stamp = () => `今天 ${NOW}`;
 const mySrc = () => ({ via:'member', by:ME, at:stamp() });
 
 function render() {
+  /* 首页用更宽的版心，其他页面保持原样 */
+  document.querySelector('.wrap').classList.toggle('wide', S.tab === 'home');
   document.getElementById('view').innerHTML = VIEWS[S.tab]();
 
   document.getElementById('nav').innerHTML = TABS.map(t => {
