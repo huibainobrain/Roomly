@@ -324,7 +324,7 @@ main{flex:1;min-width:0}
 .lw-text h2{font-size:24px;font-weight:600;line-height:1.35;color:var(--sage-deep)}
 .lw-text p{font-size:14px;color:var(--ink-2)}
 .lwelcome .ph{border:0;border-radius:0;aspect-ratio:auto;min-height:152px;background:var(--sand-2)}
-.lwelcome .ph img{object-position:60% 55%}
+.lwelcome .ph img{object-position:50% 28%}   /* 素材是 3:1，横幅更扁，往上取景保住右上角的手写字 */
 
 /* ---- 日程：今天 / 明天 / 接下来 三栏，加一张氛围卡 ---- */
 .agenda{display:grid;grid-template-columns:1fr 1fr 1fr .92fr;gap:12px;align-items:stretch}
@@ -430,6 +430,7 @@ main{flex:1;min-width:0}
 /* ---- 底部横幅：文案在左、入口在右，照片做底 ---- */
 .lband{position:relative;margin-top:18px;border-radius:22px;overflow:hidden;border:1px solid var(--sand-2);background:var(--sand)}
 .lband .ph{border:0;border-radius:0;aspect-ratio:auto;min-height:132px}
+.lband .ph img{object-position:50% 56%}   /* 取猫和沙发那一条 */
 .lband .ph figcaption{position:absolute;top:12px;left:0;right:0}
 .lband .lbt{position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:20px 28px}
 .lband .lbt p{font-family:var(--f-d);font-size:16.5px;font-weight:600;color:var(--sage-deep);max-width:34ch;line-height:1.5}
@@ -451,6 +452,9 @@ main{flex:1;min-width:0}
   .lifetop .ltme{display:none}  /* 移动端顶栏已有头像，不再重复 */
   .lband .ph{min-height:172px}
   .lband .lbt{flex-direction:column;align-items:flex-start;justify-content:center;padding:18px 20px;gap:12px}
+  /* 窄屏只露出素材中段，取景往左偏到空墙那侧，再压一层浅色让文字读得清 */
+  .lband .ph img{object-position:22% 56%}
+  .lband:has(.ph.ok) .lbt{background:linear-gradient(90deg,rgba(252,248,241,.88),rgba(252,248,241,.45) 62%,transparent)}
 }
 
 /* ============ 「不好开口」流程里的示例按钮 ============ */

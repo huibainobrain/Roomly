@@ -280,7 +280,7 @@ function vLife() {
     ${col('接下来', `到 ${inc ? inc.joined : away[0] ? away[0].to : '下周'}`, next, '暂时没有更远的安排')}
     <div class="agmoment">
       ${imgSlot('img/life-moment.jpg', '待补活动氛围图<br>沙发 · 绿植 · 暖光')}
-      <div class="agmt"><p>好的日子，是大家一起过出来的。</p>
+      <div class="agmt"><p>好的日子，<br>是大家一起过出来的。</p>
         <button class="btn" data-act="newTask">${svg(I.plus)}提一件事</button></div>
     </div>
   </section>
@@ -360,7 +360,7 @@ function vLife() {
 
   <section class="lband">
     ${imgSlot('img/life-band.jpg', '待补底部横幅图<br>绿植 · 猫 · 沙发一角 · 柔和光线')}
-    <div class="lbt"><p>生活不只是住在一起，更是和不同的人，一起把日子过舒服。</p>
+    <div class="lbt"><p>生活不只是住在一起，<br>更是和不同的人，一起把日子过舒服。</p>
       <button class="btn" data-act="awkward">有件事不好开口</button></div>
   </section>`;
 }
