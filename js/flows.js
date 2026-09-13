@@ -407,10 +407,15 @@ function awkwardSheet() {
       <div style="font-size:13.5px;font-weight:600;margin-bottom:9px">你希望怎么处理</div>
       <div class="opts">
         ${existing && gap && gap.exceeded
+          /* Case C：有约定且登记已超出 —— 先按约定中立提醒 */
           ? opt('remind', '按现有约定提醒', '由管家私下发出，不点名、不公开，只说明约定和登记情况', true) +
-            opt('clarify', '重新确认这条约定', '如果觉得每周 ' + (gap.limit || '') + ' 晚这个数字本身需要调整', false)
+            opt('clarify', '重新确认这条约定', '如果觉得' + (gap.limit ? '每周 ' + gap.limit + ' 晚' : '这个标准') + '本身需要调整', false)
           : existing
-            ? opt('clarify', '重新确认这条约定', '把标准写得更具体，减少理解上的差异', true)
+            /* Case B：有约定但登记没超出 —— 不制造矛盾，先沟通或继续观察 */
+            ? opt('private', '先私下聊一句', '现在的登记情况还在约定之内，也许说一声就够了', true) +
+              opt('watch', '先继续观察', '不做任何动作，如果之后确实超出约定，管家会主动提醒你', false) +
+              opt('clarify', '我觉得约定本身不合适', '进入重新确认，不新增约定，只改现有这一条', false)
+            /* Case A：还没有约定 */
             : opt('rule', '建立约定', sug, true)}
         ${opt('private', '私下聊聊', '管家帮你把话整理得更中性，只发给相关的人', false)}
         ${opt('house', '放到家里一起讨论', '不点名，把问题本身提出来', false)}
@@ -423,7 +428,8 @@ function awkwardSheet() {
     const sug = AWK_SUGGEST[a.focus] || '把这件事写成一条大家都认可的具体约定。';
     const existing = ruleFor(a.focus);
     const gap = gapFor(a.focus);
-    const WAY = { private:'私下聊聊', house:'一起讨论', rule:'建立约定', remind:'按现有约定提醒', clarify:'重新确认这条约定' };
+    const WAY = { private:'私下聊聊', house:'一起讨论', rule:'建立约定', remind:'按现有约定提醒',
+                  clarify:'重新确认这条约定', watch:'先继续观察' };
     const draft = existing
       ? `想和你对一下访客留宿的安排。我们之前说好的是同一访客每周最多留宿 ${gap ? gap.limit : 2} 晚，这周好像到 ${gap ? gap.actual : 3} 晚了。我不是要计较这个，就是想问问你最近是不是有什么特殊情况，需要的话我们把这条重新定一下也可以。`
       : `想和你聊一下${a.focus}这件事。我们家里目前没有相关的约定，我想问问你的想法，看能不能定一个大家都舒服的方式。`;
@@ -436,7 +442,9 @@ function awkwardSheet() {
                 '不新增规则，只修改现有这一条', '需要全员确认后才会更新'],
       rule: ['「正在讨论」中新增一个议题', '其他人看到的是议题本身，不会看到是谁提的', '全员同意后成为共同约定'],
       house: ['「正在讨论」中新增一个议题', '不点名，其他人看到的是问题本身', '达成一致后可以转成约定'],
-      private: ['这段话只发给相关的人', '家里动态中不会出现任何记录', '如果之后仍有问题，可以再放到一起讨论']
+      private: ['这段话只发给相关的人', '家里动态中不会出现任何记录', '如果之后仍有问题，可以再放到一起讨论'],
+      watch: ['不改动任何约定，也不发出提醒', '这件事只记在你自己这里，其他人看不到',
+              '如果之后登记情况真的超出约定，管家会主动提醒你', '你随时可以回来改成其他处理方式']
     };
 
     return openSheet(`
@@ -459,7 +467,8 @@ function awkwardSheet() {
       ${impactBox(impact[a.way])}
       <div class="acts"><button class="btn" data-act="awkBack">上一步</button>
         <button class="btn pri" data-act="awkSubmit">${
-          a.way === 'private' ? '发送' : a.way === 'remind' ? '发出提醒' : a.way === 'clarify' ? '发起重新确认' : '发起讨论'}</button></div>`);
+          a.way === 'private' ? '发送' : a.way === 'remind' ? '发出提醒'
+          : a.way === 'clarify' ? '发起重新确认' : a.way === 'watch' ? '就这样，先观察' : '发起讨论'}</button></div>`);
   }
 }
 
@@ -575,6 +584,126 @@ function thingSheet() {
     sheetEl().querySelectorAll('#tw button').forEach(x => x.setAttribute('aria-pressed', 'false'));
     b.setAttribute('aria-pressed', 'true');
   }));
+}
+
+/* ============================================================
+   逆向操作：记错了、改主意了、现实变了
+   ============================================================ */
+function editBillSheet(id) {
+  const b = S.bills.find(x => x.id === id);
+  openSheet(`<h3>修改「${b.title}」</h3>
+    <p class="hint">改完之后，各人应付、本月合计和月末净额都会重新算一遍。</p>
+    <div class="fld"><label for="eb-t">费用名称</label><input type="text" id="eb-t" value="${b.title}"></div>
+    <div class="fld"><label for="eb-a">金额（元）</label><input type="number" id="eb-a" min="0" step="0.01" value="${b.amount}" inputmode="decimal"></div>
+    <div class="fld"><label for="eb-p">垫付人</label><select id="eb-p">${living().map(m =>
+      `<option value="${m.id}" ${m.id === b.payer ? 'selected' : ''}>${m.name}</option>`).join('')}</select></div>
+    <div class="fld"><label>参与成员</label><div class="who-pick" id="eb-w">${living().map(m =>
+      `<button type="button" data-m="${m.id}" aria-pressed="${b.people.includes(m.id)}">${av(m.id,'sm')}${m.name}</button>`).join('')}</div></div>
+    <div class="understand"><div class="uh">改完之后</div><div class="ub" id="eb-prev"></div></div>
+    <div class="acts">
+      <button class="btn danger" data-act="delBill" data-id="${b.id}">删除这笔</button>
+      <button class="btn" data-act="close">取消</button>
+      <button class="btn pri" data-act="doEditBill">保存</button></div>`);
+  const upd = () => {
+    const a = parseFloat(document.getElementById('eb-a').value) || 0;
+    const ppl = [...sheetEl().querySelectorAll('#eb-w button[aria-pressed="true"]')].map(x => x.dataset.m);
+    document.getElementById('eb-prev').innerHTML =
+      ppl.map(p => uline(mem(p).name, yuan(a / (ppl.length || 1)))).join('') ||
+      uline('提示', '至少选择一位成员');
+  };
+  upd();
+  document.getElementById('eb-a').addEventListener('input', upd);
+  sheetEl().querySelectorAll('#eb-w button').forEach(x => x.addEventListener('click', () => {
+    const on = x.getAttribute('aria-pressed') === 'true';
+    if (on && sheetEl().querySelectorAll('#eb-w button[aria-pressed="true"]').length === 1) return;
+    x.setAttribute('aria-pressed', on ? 'false' : 'true'); upd();
+  }));
+  sheetEl().dataset.bid = id;
+}
+
+function editAwaySheet(id) {
+  const a = S.away.find(x => x.id === id);
+  openSheet(`<h3>修改离家登记</h3>
+    <p class="hint">改完之后，值日暂缓范围和登记在住天数都会跟着重新计算。</p>
+    <div class="fld"><label for="ea-f">开始</label><input type="text" id="ea-f" value="${a.from}"></div>
+    <div class="fld"><label for="ea-t">结束</label><input type="text" id="ea-t" value="${a.to}"></div>
+    <div class="fld"><label for="ea-d">天数</label><input type="number" id="ea-d" min="1" value="${a.days}"></div>
+    <div class="acts">
+      <button class="btn danger" data-act="delAway" data-id="${a.id}">取消这次离家计划</button>
+      <button class="btn" data-act="close">返回</button>
+      <button class="btn pri" data-act="doEditAway">保存</button></div>`);
+  sheetEl().dataset.aid = id;
+}
+
+function editVisitSheet(id) {
+  const v = S.visits.find(x => x.id === id);
+  const o = overnightRule();
+  openSheet(`<h3>修改访客登记</h3>
+    <p class="hint">改了日期或留宿信息，本周留宿次数和约定判断都会重新算。</p>
+    <div class="fld"><label for="ev-d">日期</label><input type="text" id="ev-d" value="${v.date}"></div>
+    <div class="fld"><label for="ev-t">到访时间</label><input type="text" id="ev-t" value="${v.time}"></div>
+    <div class="fld"><label>是否留宿</label><div class="who-pick" id="ev-o">
+      <button type="button" data-v="0" aria-pressed="${!v.overnight}">不留宿</button>
+      <button type="button" data-v="1" aria-pressed="${v.overnight}">留宿</button></div></div>
+    <div class="notice">${svg(I.info)}<span>当前 ${mem(v.host).name} 本周共登记 ${nightsOf(v.host)} 晚，约定是每周 ${o.limit} 晚。</span></div>
+    <div class="acts">
+      <button class="btn danger" data-act="delVisit" data-id="${v.id}">取消这次登记</button>
+      <button class="btn" data-act="close">返回</button>
+      <button class="btn pri" data-act="doEditVisit">保存</button></div>`);
+  sheetEl().querySelectorAll('#ev-o button').forEach(b => b.addEventListener('click', () => {
+    sheetEl().querySelectorAll('#ev-o button').forEach(x => x.setAttribute('aria-pressed', 'false'));
+    b.setAttribute('aria-pressed', 'true');
+  }));
+  sheetEl().dataset.vid = id;
+}
+
+function editRepairSheet(id) {
+  const r = S.repairs.find(x => x.id === id);
+  const accepted = r.timeline.length > 1;
+  openSheet(`<h3>${r.desc}</h3>
+    <p class="hint">${accepted ? '相寓已经受理，这时只能补充说明，不能再撤回。' : '还没有被受理，可以补充描述或撤回这张单。'}</p>
+    <div class="fld"><label for="er-d">补充说明</label><input type="text" id="er-d" placeholder="例如：换过灯泡还是不亮"></div>
+    <div class="acts">
+      ${accepted
+        ? `<button class="btn" data-act="doneRepair" data-id="${r.id}">标记已修好</button>`
+        : `<button class="btn danger" data-act="delRepair" data-id="${r.id}">撤回报修</button>`}
+      <button class="btn" data-act="close">返回</button>
+      <button class="btn pri" data-act="doEditRepair">补充</button></div>`);
+  sheetEl().dataset.rid = id;
+}
+
+function shareSheet(id) {
+  const s = S.supplies.find(x => x.id === id);
+  const cur = s.kind === 'private' ? 'private' : s.rule.startsWith('可直接') ? 'free' : 'ask';
+  openSheet(`<h3>${s.name} 的共享方式</h3>
+    <p class="hint">改成"不共享"之后，其他室友的可借列表里会立刻看不到这件东西。</p>
+    <div class="opts">
+      ${[['private','不共享','只有你能看到具体内容'],
+         ['free','可以直接使用','其他人不用问，用完归位'],
+         ['ask','使用前问我','其他人发起请求，你同意后才算借出']].map(([k, t, d]) => `
+        <button class="opt" data-act="doShare" data-id="${s.id}" data-v="${k}" aria-pressed="${cur === k}">
+          <span><b style="font-family:var(--f-d)">${t}</b>
+          <span style="display:block;font-size:12.5px;color:var(--ink-3);font-weight:400">${d}</span></span>
+          <span class="ok">${svg(I.check,2.4)}</span></button>`).join('')}
+    </div>
+    <div class="acts"><button class="btn" data-act="close">返回</button></div>`);
+}
+
+/* 空间重新划分：真的写回分区，并留下共同设定的时间 */
+function redivideSheet() {
+  openSheet(`<h3>重新划分公共空间</h3>
+    <p class="hint">分区是大家一起定的。换一种分法需要全员认可，这里先选一个方案。</p>
+    <div class="opts">
+      <button class="opt" data-act="doRedivide" data-v="rotate">
+        <span><b style="font-family:var(--f-d)">顺次轮换一格</b>
+        <span style="display:block;font-size:12.5px;color:var(--ink-3);font-weight:400">每个人往下挪一格，公共区保持不变</span></span>
+        <span class="ok">${svg(I.check,2.4)}</span></button>
+      <button class="opt" data-act="doRedivide" data-v="keep">
+        <span><b style="font-family:var(--f-d)">维持现在的分法</b>
+        <span style="display:block;font-size:12.5px;color:var(--ink-3);font-weight:400">不做改动，留个记录说明讨论过</span></span>
+        <span class="ok">${svg(I.check,2.4)}</span></button>
+    </div>
+    <div class="acts"><button class="btn" data-act="close">取消</button></div>`);
 }
 
 /* 临时任务：不进入固定任务模板 */

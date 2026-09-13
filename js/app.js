@@ -28,6 +28,8 @@ function render() {
     roster.map(m => av(m.id, 'sm' + (statusOf(m.id) === 'in' ? '' : ' out'))).join('') +
     `<span class="rmore">${living().length} 位成员</span>`;
   document.getElementById('demoPanel').hidden = !S.demoPanel;
+  document.getElementById('idList').innerHTML = living().map(m =>
+    `<button data-act="switchMe" data-k="${m.id}" aria-pressed="${m.id === ME}">${av(m.id, 'sm')}${m.name}</button>`).join('');
 
   const markSvg = svg('<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-5h5v5"/>');
   document.getElementById('markA').innerHTML = markSvg;
@@ -71,7 +73,133 @@ document.addEventListener('click', e => {
   case 'seg': S.segment = el.dataset.k; render(); break;
   case 'togglePrefs': S.showAllPrefs = !S.showAllPrefs; render(); break;
   case 'demoPanel': S.demoPanel = !S.demoPanel; render(); break;
-  case 'reset': S = structuredClone(SEED); render(); toast('演示数据已重置'); break;
+  case 'reset': S = structuredClone(SEED); ME = S.me; render(); toast('演示数据已重置'); break;
+  case 'switchMe': {
+    ME = el.dataset.k; S.me = ME; S.demoPanel = false; S.sub = null;
+    render(); toast(`已切换到 ${mem(ME).name} 的视角，可以看到发给他的请求`);
+    break;
+  }
+  /* 相寓侧的变更由平台推送，住户不能自己改 */
+  case 'syncPlatform': {
+    const lin = MEMBERS.find(m => m.id === 'lin');
+    lin.joined = lin.joined === '9月20日' ? '9月25日' : '9月20日';
+    lin.lease = { via:'platform', at:stamp() };
+    logFeed('sys', `相寓更新了 ${lin.name} 的入住日期：${lin.joined}`);
+    render(); toast(`相寓已同步：${lin.name} 改为 ${lin.joined} 入住，相关页面已全部更新`);
+    break;
+  }
+
+  /* ---- 逆向操作：改错了、取消、提前结束 ---- */
+  case 'editBill': editBillSheet(id); break;
+  case 'doEditBill': {
+    const b = S.bills.find(x => x.id === sheetEl().dataset.bid);
+    const amount = parseFloat(document.getElementById('eb-a').value) || 0;
+    if (amount <= 0) { toast('金额要大于 0'); return; }
+    b.title = document.getElementById('eb-t').value.trim() || b.title;
+    b.amount = amount;
+    b.payer = document.getElementById('eb-p').value;
+    b.people = [...sheetEl().querySelectorAll('#eb-w button[aria-pressed="true"]')].map(x => x.dataset.m);
+    delete b.shares; b.method = 'even';
+    b.src = { ...b.src, edited:stamp(), by:ME };
+    logFeed(ME, `修改了费用「${b.title}」，金额改为 <b>${yuan(amount)}</b>`);
+    closeSheet(); render();
+    toast(`已更新：${perLabel(b)}，本月合计 ${yuan(monthTotal())}，净额已重算`);
+    break;
+  }
+  case 'delBill': {
+    const b = S.bills.find(x => x.id === id);
+    S.bills = S.bills.filter(x => x.id !== id);
+    logFeed(ME, `删除了费用「${b.title}」`);
+    closeSheet(); render();
+    toast(`已删除。本月合计 ${yuan(monthTotal())}，待你支付 ${yuan(myDueTotal())}，净额已重算`);
+    break;
+  }
+  case 'editAway': editAwaySheet(id); break;
+  case 'doEditAway': {
+    const a = S.away.find(x => x.id === sheetEl().dataset.aid);
+    a.from = document.getElementById('ea-f').value.trim();
+    a.to = document.getElementById('ea-t').value.trim();
+    a.days = Math.max(1, parseInt(document.getElementById('ea-d').value) || 1);
+    a.src = mySrc();
+    logFeed(ME, `修改了离家登记：${a.from} — ${a.to}`);
+    closeSheet(); render();
+    toast(`已更新，登记在住天数改为 ${30 - a.days} 天，值日与分摊建议同步重算`);
+    break;
+  }
+  case 'delAway': {
+    const a = S.away.find(x => x.id === id);
+    S.away = S.away.filter(x => x.id !== id);
+    S.tasks.forEach(t => { if (t.who === a.who && t.note && t.note.includes('离家')) delete t.note; });
+    logFeed(a.who, '取消了离家计划');
+    closeSheet(); render();
+    toast('离家计划已取消，成员状态、值日和分摊建议都已恢复');
+    break;
+  }
+  case 'editVisit': editVisitSheet(id); break;
+  case 'doEditVisit': {
+    const v = S.visits.find(x => x.id === sheetEl().dataset.vid);
+    v.date = document.getElementById('ev-d').value.trim() || v.date;
+    v.time = document.getElementById('ev-t').value.trim() || v.time;
+    v.overnight = sheetEl().querySelector('#ev-o button[aria-pressed="true"]').dataset.v === '1';
+    v.nights = v.overnight ? (v.nights || 1) : 0;
+    v.src = mySrc();
+    const o = overnightRule();
+    closeSheet(); render();
+    toast(`已更新。${mem(v.host).name} 本周登记 ${nightsOf(v.host)} 晚，${o.exceeded ? '超过' : '仍在'}约定的 ${o.limit} 晚${o.exceeded ? '' : '之内'}`);
+    break;
+  }
+  case 'delVisit': {
+    const v = S.visits.find(x => x.id === id);
+    S.visits = S.visits.filter(x => x.id !== id);
+    const o = overnightRule();
+    logFeed(ME, `取消了 ${v.date} 的访客登记`);
+    closeSheet(); render();
+    toast(`已取消。${mem(v.host).name} 本周登记回到 ${nightsOf(v.host)} 晚，规则判断已重新运行`);
+    break;
+  }
+  case 'editRepair': editRepairSheet(id); break;
+  case 'doEditRepair': {
+    const r = S.repairs.find(x => x.id === sheetEl().dataset.rid);
+    const add = document.getElementById('er-d').value.trim();
+    if (add) { r.timeline.push({ s:'住户补充：' + add, at:stamp(), via:'member' }); logFeed(ME, `补充了报修说明：${add}`); }
+    closeSheet(); render(); toast(add ? '已补充，相寓会看到这条说明' : '没有补充内容');
+    break;
+  }
+  case 'delRepair': {
+    S.repairs = S.repairs.filter(x => x.id !== id);
+    logFeed(ME, '撤回了一张报修单');
+    closeSheet(); render(); toast('报修已撤回。受理之后就不能再撤回了。');
+    break;
+  }
+  case 'doneRepair': {
+    const r = S.repairs.find(x => x.id === id);
+    r.timeline.push({ s:'已完成', at:stamp(), via:'member' });
+    logFeed(ME, `确认「${r.desc}」已修好`);
+    closeSheet(); render(); toast('已标记完成，生活页的报修状态同步更新');
+    break;
+  }
+  case 'washCancel':
+    logFeed(ME, '取消了洗衣机使用登记');
+    S.laundry = { user:null, startedAt:null, minutes:0, endsAt:null, notifyMe:false, src:null };
+    render(); toast('已取消，洗衣机恢复空闲'); break;
+  case 'redivide': redivideSheet(); break;
+  case 'doRedivide': {
+    if (el.dataset.v === 'rotate') {
+      const ids = living().map(m => m.id);
+      S.spaces.forEach(sp => {
+        const owned = sp.zones.filter(z => z.o !== 'public' && !z.pending);
+        const names = owned.map(z => z.o);
+        owned.forEach((z, i) => { z.o = names[(i + 1) % names.length]; });
+        sp.src = { via:'shared', at:TODAY };
+      });
+      logFeed('sys', '全员重新划分了公共空间，每人顺次挪了一格');
+      closeSheet(); render(); toast('分区已更新，你的分区也跟着变了');
+    } else {
+      logFeed('sys', '讨论后决定维持现有的公共空间分法');
+      closeSheet(); render(); toast('已记录：维持现在的分法');
+    }
+    break;
+  }
 
   /* ---- 值日：完成即写一条完成记录，责任分布由这些记录统计 ---- */
   case 'doneTask': {
@@ -96,9 +224,11 @@ document.addEventListener('click', e => {
     if (k === 'swap') {
       const c = sheetEl().dataset.cand;
       if (c) {
-        t.who = c; t.deferred = `由 ${mem(ME).name} 换给 ${mem(c).name}，等待对方确认`;
-        logFeed('sys', `${mem(ME).name} 发起了「${t.task}」的换班，推荐 ${mem(c).name}`);
-        closeSheet(); render(); toast(`已向 ${mem(c).name} 发起换班请求`);
+        /* 换班要对方同意才生效，负责人在此之前不变 */
+        newRequest('swap', c, `${t.task} 换班`, `原定由 ${mem(ME).name} 负责，想和你换一下`, { task:t.id });
+        t.deferred = `已向 ${mem(c).name} 发起换班，等待回应`;
+        logFeed('sys', `${mem(ME).name} 就「${t.task}」发起了换班请求`);
+        closeSheet(); render(); toast(`已向 ${mem(c).name} 发起换班请求，对方同意后负责人才会变`);
       }
     } else {
       t.due = '顺延到明天';
@@ -153,8 +283,56 @@ document.addEventListener('click', e => {
   }
   case 'borrow': {
     const s = S.supplies.find(x => x.id === id);
-    logFeed(ME, `登记借用了 ${mem(s.owner).name} 的${s.name}`);
-    render(); toast(s.rule.startsWith('可直接') ? '已登记借用，用完清洗放回' : `已向 ${mem(s.owner).name} 发出询问`);
+    if (s.rule.startsWith('可直接')) {
+      logFeed(ME, `登记借用了 ${mem(s.owner).name} 的${s.name}`);
+      render(); toast('已登记借用，用完清洗放回');
+    } else {
+      /* "使用前问我"要走完整请求流程，不能只弹个提示 */
+      newRequest('borrow', s.owner, `借用${s.name}`, `${mem(ME).name} 想用一下你的${s.name}`, { thing:s.id });
+      render(); toast(`已向 ${mem(s.owner).name} 发出请求，对方回应后你会看到结果`);
+    }
+    break;
+  }
+  case 'reqAgree': case 'reqDecline': case 'reqDiscuss': {
+    const r = S.requests.find(x => x.id === id);
+    r.status = act === 'reqAgree' ? 'agreed' : act === 'reqDecline' ? 'declined' : 'discuss';
+    r.by = ME; r.resolvedAt = stamp();
+    if (r.status === 'agreed') {
+      if (r.kind === 'swap' && r.task) {
+        const t = S.tasks.find(x => x.id === r.task);
+        if (t) { t.who = ME; t.deferred = `由 ${mem(r.from).name} 换给 ${mem(ME).name}，已同意`; }
+      }
+      if (r.kind === 'stay') S.visits.unshift({ id:'v' + Date.now(), host:r.from, guest:'朋友',
+        date:'今天', time:'经室友同意', overnight:true, nights:1, week:true,
+        src:{ via:'member', by:r.from, at:stamp() } });
+    }
+    if (r.status === 'discuss') {
+      S.topics.push({ id:'tp' + Date.now(), title:REQ_LABEL[r.kind] + '：' + r.subject, status:'open',
+        done:false, detail:r.detail, votes:{ [ME]:'想讨论一下' } });
+      logFeed('sys', `「${r.subject}」已提到家里一起讨论`);
+    }
+    logFeed(ME, `回应了 ${mem(r.from).name} 的${REQ_LABEL[r.kind]}请求：${REQ_STATUS[r.status]}`);
+    render();
+    toast(r.status === 'agreed' ? '已同意，发起人会看到结果'
+        : r.status === 'declined' ? '已回复"这次不太方便"，不会显示为拒绝'
+        : '已转为一起讨论');
+    break;
+  }
+  case 'reqWithdraw': {
+    S.requests = S.requests.filter(x => x.id !== id);
+    render(); toast('已撤回请求');
+    break;
+  }
+  case 'shareMode': shareSheet(id); break;
+  case 'doShare': {
+    const s = S.supplies.find(x => x.id === id), v = el.dataset.v;
+    if (v === 'private') { s.kind = 'private'; s.zone = s.zone || '未标注位置'; delete s.rule; }
+    else { s.kind = 'lend'; s.rule = v === 'free' ? '可直接使用，用后清洗放回' : '使用前问一声'; }
+    s.src = mySrc();
+    S.segment = s.kind;
+    logFeed(ME, `把「${s.name}」的共享方式改为${v === 'private' ? '不共享' : v === 'free' ? '可直接使用' : '使用前询问'}`);
+    closeSheet(); render();
+    toast(v === 'private' ? '已改为不共享，其他人的可借列表里立刻看不到了' : '已更新共享方式');
     break;
   }
   case 'newThing': thingSheet(); break;
@@ -208,8 +386,8 @@ document.addEventListener('click', e => {
       nights: on ? nights : 0, week:true, src:mySrc() });
     const o = overnightRule();
     const over = on && had + nights > o.limit;
-    if (over) S.visitAsks.push({ id:'va' + Date.now(), host,
-      text:`希望${guest}本周再留宿 ${nights} 晚`, replies:{} });
+    if (over) newRequest('stay', 'all', `${guest}本周再留宿 ${nights} 晚`,
+      `按登记记录这会是本周第 ${had + nights} 晚，超过约定的每周 ${o.limit} 晚`);
     logFeed(ME, `登记了访客：${date} ${time}${on ? ` · 留宿 ${nights} 晚` : ''}`);
     closeSheet(); render();
     toast(over ? `本周登记共 ${had + nights} 晚，超过约定的 ${o.limit} 晚，已向室友发出征询`
@@ -217,25 +395,6 @@ document.addEventListener('click', e => {
         : '已登记，室友会看到这次到访');
     break;
   }
-  case 'visitOk': {
-    const a = S.visitAsks.find(x => x.id === id);
-    S.visits.unshift({ id:'v' + Date.now(), host:a.host, guest:'朋友', date:'今天', time:'经室友同意',
-      overnight:true, nights:1, week:true, src:{ via:'member', by:a.host, at:stamp() } });
-    S.visitAsks = S.visitAsks.filter(x => x.id !== id);
-    logFeed(ME, `同意了 ${mem(a.host).name} 的额外留宿`);
-    render(); toast('已同意，这一晚已记入本周登记');
-    break;
-  }
-  case 'visitTalk': {
-    const a = S.visitAsks.find(x => x.id === id);
-    S.topics.push({ id:'tp' + Date.now(), title:'访客留宿频率', done:false,
-      detail:'由一次额外留宿请求引发。当前约定：同一访客每周最多留宿 2 晚。', votes:{ [ME]:'想讨论一下' } });
-    S.visitAsks = S.visitAsks.filter(x => x.id !== id);
-    logFeed('sys', '「访客留宿频率」已提到家里一起讨论');
-    goTo('talk'); toast('已放到家里一起讨论，不会显示是谁提出的');
-    break;
-  }
-
   /* ---- 离家 ---- */
   case 'newAway': awaySheet(); break;
   case 'doAway2': {
@@ -361,6 +520,20 @@ document.addEventListener('click', e => {
     render(); toast('已记录。想讨论不是反对，只是需要再聊聊。');
     break;
   }
+  /* 没达成一致也是一种结果：原约定保持不变 */
+  case 'holdTopic': {
+    const t = S.topics.find(x => x.id === id);
+    t.status = 'hold'; t.done = true; t.heldAt = stamp();
+    logFeed('sys', `「${t.title}」暂不调整，保持原有约定`);
+    render(); toast('已标记为暂不调整。原来的约定保持不变，之后想起来还能再提。');
+    break;
+  }
+  case 'reopenTopic': {
+    const t = S.topics.find(x => x.id === id);
+    t.status = 'open'; t.done = false; t.votes = { [ME]:'想讨论一下' };
+    render(); toast('已重新打开讨论');
+    break;
+  }
   case 'discussLin': {
     const d = linDiff();
     d.diff.forEach(x => S.topics.push({ id:'tp' + Date.now() + x.k, title:`${x.label}（${d.lin.name} 入住后）`,
@@ -416,6 +589,14 @@ document.addEventListener('click', e => {
     const gap = gapFor(a.focus);
     if (a.way === 'private') {
       closeSheet(); render(); toast('已私下发送。家里动态中不会留下记录。');
+    } else if (a.way === 'watch') {
+      /* 没超出约定就不制造矛盾，只在自己这里留个观察记录 */
+      S.issues.unshift({ id:'i' + Date.now(), cat:a.readCat || a.cat, rule:existing && existing.id,
+        title:a.focus, level:0, count:0, window:'最近 7 天',
+        note:'目前的登记情况还在约定之内，先继续观察，没有发出任何提醒。',
+        src:{ via:'member', by:ME, at:stamp() }, follow:'self' });
+      closeSheet(); goTo('talk', 'issue');
+      toast('已记在你自己这里。没有超出约定，所以不会打扰任何人。');
     } else if (a.way === 'remind') {
       logFeed('sys', `按共同约定发出提醒：${existing.title}`);
       const ex = S.issues.find(i => i.rule === existing.id);
@@ -580,16 +761,31 @@ function startWash(minutes) {
   logFeed(ME, `开始使用洗衣机，预计 ${S.laundry.endsAt} 结束`);
 }
 
+/* 统一的请求创建口，保证每个请求都有发起人、接收人、时间和状态 */
+function newRequest(kind, to, subject, detail, extra) {
+  const r = { id:'rq' + Date.now(), kind, from:ME, to, subject, detail,
+              status:'pending', at:stamp(), ...(extra || {}) };
+  S.requests.push(r);
+  return r;
+}
+
+/* 达成一致：同一个议题只更新原约定，不会因为入口不同长出内容相近的第二条 */
 function finishTopic(t) {
-  t.done = true;
-  if (t.revisit) {
-    const r = S.rules.find(x => x.id === t.revisit);
-    if (r) { r.desc = t.detail; r.since = TODAY; r.by = living().map(m => m.id); }
-    logFeed('sys', `「${r ? r.title : t.title}」已重新确认`);
+  t.done = true; t.status = 'agreed';
+  const target = t.revisit
+    ? S.rules.find(x => x.id === t.revisit)
+    : (t.prefKey && S.rules.find(x => x.prefKey === t.prefKey));
+  if (target) {
+    target.history = target.history || [];
+    target.history.push({ desc:target.desc, until:TODAY });
+    target.desc = t.detail;
+    target.since = TODAY;
+    target.by = living().map(m => m.id);
+    logFeed('sys', `「${target.title}」已更新到第 ${target.history.length + 1} 版`);
     return;
   }
   S.rules.push({ id:'r' + Date.now(), title:t.title.replace(/（.*?）/, ''), cat:'共识',
-    desc:t.detail, by:living().map(m => m.id), since:TODAY, prefKey:t.prefKey });
+    desc:t.detail, by:living().map(m => m.id), since:TODAY, prefKey:t.prefKey, history:[] });
   logFeed('sys', `「${t.title}」已获全员确认，成为共同约定`);
 }
 

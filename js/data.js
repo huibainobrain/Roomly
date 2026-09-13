@@ -74,7 +74,8 @@ const MEMBERS = [
 
 const KEY_PREFS = ['quiet', 'overnight', 'kitchen', 'temp'];
 
-const ME = 'yiming';
+/* 演示环境可以切换身份，这样"请求—回应"这类双方流程能被完整走通 */
+let ME = 'yiming';
 const mem = id => {
   const base = MEMBERS.find(m => m.id === id) || { id, name:id, short:'?', c:'#8A938D', prefs:{} };
   if (id === ME && typeof S !== 'undefined' && S && S.myPrefs)
@@ -223,8 +224,11 @@ const SEED = {
     { id:'v1', host:'alex', guest:'朋友', date:'9月9日',  time:'20:00 起', overnight:true, week:true,
       src:{ via:'member', by:'alex', at:'9月9日 19:30' } }
   ],
-  visitAsks: [
-    { id:'va1', host:'alex', text:'希望朋友本周再留宿 1 晚', replies:{} }
+  /* 请求原语：借物、换班、额外留宿共用一套生命周期
+     pending → agreed / declined / discuss，双方都能看到结果 */
+  requests: [
+    { id:'rq1', kind:'stay', from:'alex', to:'all', subject:'朋友本周再留宿 1 晚',
+      detail:'按登记记录这会超过约定的每周 2 晚', status:'pending', at:'今天 19:40' }
   ],
 
   /* 洗衣机：谁点了开始使用、选了多久，状态就是什么 */
@@ -289,6 +293,7 @@ const SEED = {
     { who:'tom',   text:'登记了离家：9月8日 — 9月18日', t:'9月7日 22:10' }
   ],
 
+  me: 'yiming',
   onboardDone: { yiming:'8月12日', alex:'6月30日', tom:'6月30日', lin:'9月10日' },
   linDiscussed: false,
   moveout: null,
@@ -301,12 +306,18 @@ const SEED = {
 };
 
 /* ============ 持久化 ============ */
-const KEY = 'hezu-v3';
+const KEY = 'hezu-v4';
 let S;
 try {
   const raw = JSON.parse(localStorage.getItem(KEY));
-  S = (raw && raw.bills && raw.rules && raw.spaces && raw.completions) ? raw : structuredClone(SEED);
+  /* 旧版本存档缺字段时整份回退到种子数据，避免半旧半新的状态 */
+  const complete = raw && ['bills','rules','spaces','completions','requests','repairs','visits']
+    .every(k => Array.isArray(raw[k]));
+  S = complete ? raw : structuredClone(SEED);
 } catch (e) { S = structuredClone(SEED); }
+/* 补齐后来新增的可选字段，老存档也能正常跑 */
+Object.keys(SEED).forEach(k => { if (S[k] === undefined) S[k] = structuredClone(SEED[k]); });
+ME = S.me || 'yiming';
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 const logFeed = (who, text, t) => { S.feed.unshift({ who, text, t: t || '刚刚' }); S.feed = S.feed.slice(0, 10); };
 
@@ -446,9 +457,25 @@ const SUGGESTION = {
   smoke: '公共区域不吸烟，包括阳台。'
 };
 
+/* ---------- 请求：谁发起、发给谁、什么状态 ---------- */
+const REQ_LABEL = { borrow:'借用物品', swap:'换班', stay:'额外留宿' };
+const REQ_STATUS = { pending:'等待回应', agreed:'已同意', declined:'对方不方便', discuss:'转为一起讨论' };
+/* 需要我回应的：指名给我的，或发给全体但不是我发起的 */
+const inboxRequests = () => S.requests.filter(r => r.status === 'pending' &&
+  r.from !== ME && (r.to === ME || r.to === 'all'));
+const myRequests = () => S.requests.filter(r => r.from === ME);
+const openRequests = () => S.requests.filter(r => r.status === 'pending');
+
+/* ---------- 讨论：达成 / 暂不调整 ---------- */
+const openTopics = () => S.topics.filter(t => t.status === 'open' || (!t.status && !t.done));
+const holdTopics = () => S.topics.filter(t => t.status === 'hold');
+
+/* 已经处理过的问题不再重复提醒 */
+const needsReminder = issue => !issue.follow || issue.follow === 'self';
+
 const badge = tab => {
-  if (tab === 'life')  return myTasks().filter(t => t.due === '今天').length + lowSupplies().length + S.visitAsks.length;
+  if (tab === 'life')  return myTasks().filter(t => t.due === '今天').length + lowSupplies().length + inboxRequests().length;
   if (tab === 'bill')  return myDue().length;
-  if (tab === 'talk')  return rulesToRevisit().length + S.topics.filter(t => !t.done).length;
+  if (tab === 'talk')  return rulesToRevisit().length + openTopics().length;
   return 0;
 };

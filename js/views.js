@@ -16,6 +16,27 @@ const backBtn = (label, tab) =>
 const head = (h1, p) => `<div class="phead"><h1>${h1}</h1>${p ? `<p>${p}</p>` : ''}</div>`;
 const sec  = (t, sub, extra) =>
   `<div class="sechead"><h2>${t}</h2>${extra || (sub ? `<span class="sub">${sub}</span>` : '')}</div>`;
+/* 请求卡片：发起人、接收人、时间、状态、结果一应俱全 */
+function reqCard(r, mine) {
+  const done = r.status !== 'pending';
+  return `<div class="card pad ${done ? 'dim' : ''}">
+    <div style="display:flex;gap:10px;align-items:flex-start">${av(r.from, 'lg')}
+      <div style="flex:1">
+        <b style="font-family:var(--f-d);font-size:15px">${mem(r.from).name}：${r.subject}</b>
+        <div style="font-size:12.5px;color:var(--ink-3);margin-top:2px">${r.detail}</div>
+        <div class="srctag">${svg(I.info)}${REQ_LABEL[r.kind]}请求 · 发给${r.to === 'all' ? '全体室友' : mem(r.to).name} · ${r.at}</div>
+      </div>
+      <span class="pill ${done ? (r.status === 'agreed' ? 'ok' : 'plain') : 'warn'}">${REQ_STATUS[r.status]}</span></div>
+    ${done ? `<div class="srctag">${svg(I.check)}${mem(r.by).name} 于 ${r.resolvedAt} 回应</div>`
+      : mine ? `<div class="btnrow" style="margin-top:10px">
+          <button class="btn sm" data-act="reqWithdraw" data-id="${r.id}">撤回请求</button></div>`
+      : `<div class="btnrow" style="margin-top:10px">
+          <button class="btn pri sm" data-act="reqAgree" data-id="${r.id}">可以</button>
+          <button class="btn sm" data-act="reqDecline" data-id="${r.id}">这次不太方便</button>
+          <button class="btn sm" data-act="reqDiscuss" data-id="${r.id}">想讨论一下</button></div>`}
+  </div>`;
+}
+
 /* 来源标签：这条信息是谁、什么时候、怎么产生的 */
 const srcTag = (s, cls) => s ? `<span class="srctag ${cls || ''}">${svg(I.info)}${srcNote(s)}</span>` : '';
 
@@ -72,6 +93,15 @@ function vHome() {
       <div class="m">${revisit.map(r => r.rule.title).join(' · ')}</div>
       <div class="act"><button class="btn pri sm" data-act="go" data-tab="talk" data-sub="lin">参与讨论</button></div>
     </div></div>`);
+
+  const inbox = inboxRequests();
+  if (inbox.length) todos.push(`<div class="todo d"><span class="ic">${svg(I.guest)}</span><div class="bd">
+      <div class="k">等你回应</div><div class="t">${mem(inbox[0].from).name}：${inbox[0].subject}</div>
+      <div class="m">${inbox[0].detail}</div>
+      <div class="act">
+        <button class="btn pri sm" data-act="reqAgree" data-id="${inbox[0].id}">可以</button>
+        <button class="btn sm" data-act="reqDecline" data-id="${inbox[0].id}">这次不太方便</button>
+      </div></div></div>`);
 
   const low = lowSupplies()[0];
   if (low && todos.length < 4) todos.push(`<div class="todo c"><span class="ic">${svg(I.box)}</span><div class="bd">
@@ -139,7 +169,7 @@ function vLife() {
     facility: L.user ? `${mem(L.user).name} 使用中，预计 ${L.endsAt} 结束` : '洗衣机空闲，可以直接用'
   };
   const flag = { chore: myTasks().filter(t => t.due === '今天').length, supply: lowSupplies().length,
-                 guest: S.visitAsks.length, space: S.zoneProposal.confirmed ? 0 : 1, away:0, facility:0 };
+                 guest: inboxRequests().filter(r => r.kind === 'stay').length, space: S.zoneProposal.confirmed ? 0 : 1, away:0, facility:0 };
   const tile = id => {
     const m = LIFE_MODS.find(x => x.id === id);
     return `<button class="mod" data-act="go" data-tab="life" data-sub="${id}">
@@ -199,6 +229,10 @@ function vChore() {
   return `
     ${backBtn('生活', 'life')}
     ${head('值日', '固定任务由大家一起定，当期安排由系统按日期和离家登记生成。谁临时不方便，可以换班或顺延。')}
+    ${inboxRequests().filter(r => r.kind === 'swap').length ? `${sec('等你回应的换班')}
+      <div class="stack">${inboxRequests().filter(r => r.kind === 'swap').map(r => reqCard(r)).join('')}</div>` : ''}
+    ${myRequests().filter(r => r.kind === 'swap').length ? `${sec('我发出的换班请求')}
+      <div class="stack">${myRequests().filter(r => r.kind === 'swap').map(r => reqCard(r, true)).join('')}</div>` : ''}
     ${sec('我的任务', `${mine.filter(t => !t.done).length} 项待完成`)}
     <div class="card rows">${mine.map(taskRow).join('') || '<div class="empty">这周你没有分到任务</div>'}</div>
     ${sec('这周家里的分工')}
@@ -269,7 +303,8 @@ function vSupply() {
         <div class="owner">${av(s.owner)}${mem(s.owner).name} 登记${s.owner === ME ? '（你）' : ''}</div>
         <div class="rulenote">${s.rule}</div>
         <div class="foot"><span></span>${s.owner === ME
-          ? `<button class="btn sm" data-act="delThing" data-id="${s.id}">删除</button>`
+          ? `<button class="btn sm" data-act="shareMode" data-id="${s.id}">共享方式</button>
+             <button class="btn sm" data-act="delThing" data-id="${s.id}">删除</button>`
           : `<button class="btn sm" data-act="borrow" data-id="${s.id}">${s.rule.startsWith('可直接') ? '登记借用' : '问一声'}</button>`}</div>
         ${srcTag(s.src)}</div>`;
     }
@@ -278,7 +313,9 @@ function vSupply() {
         <span class="pill plain">${svg(I.lock)}私人</span></div>
       <div class="owner">${av(s.owner)}${mem(s.owner).name}${s.owner === ME ? '（你）' : ''}</div>
       <div class="rulenote">${s.owner === ME ? '只有你能看到具体内容。' : '这是私人区域，其他人不需要知道里面具体有什么。'}</div>
-      ${s.owner === ME ? `<div class="foot"><span></span><button class="btn sm" data-act="delThing" data-id="${s.id}">删除</button></div>` : ''}
+      ${s.owner === ME ? `<div class="foot"><span></span>
+        <button class="btn sm" data-act="shareMode" data-id="${s.id}">共享方式</button>
+        <button class="btn sm" data-act="delThing" data-id="${s.id}">删除</button></div>` : ''}
       ${s.owner === ME ? srcTag(s.src) : ''}</div>`;
   };
 
@@ -287,6 +324,10 @@ function vSupply() {
     ${head('公共物品', '不是家里所有东西都属于所有人。数量和状态都由成员自己更新，系统不会去数。')}
     <div class="segbar">${KINDS.map(k => `<button class="seg" data-act="seg" data-k="${k.k}" aria-pressed="${seg === k.k}">${k.label}</button>`).join('')}</div>
     <div class="notice" style="margin-bottom:14px">${svg(I.info)}<span>${KINDS.find(k => k.k === seg).desc}</span></div>
+    ${inboxRequests().filter(r => r.kind === 'borrow').length ? `${sec('等你回应的借用')}
+      <div class="stack" style="margin-bottom:14px">${inboxRequests().filter(r => r.kind === 'borrow').map(r => reqCard(r)).join('')}</div>` : ''}
+    ${myRequests().filter(r => r.kind === 'borrow').length ? `${sec('我发出的借用请求')}
+      <div class="stack" style="margin-bottom:14px">${myRequests().filter(r => r.kind === 'borrow').map(r => reqCard(r, true)).join('')}</div>` : ''}
     ${seg !== 'public' ? `<div class="btnrow" style="margin-bottom:12px">
       <button class="btn pri sm" data-act="newThing">${svg(I.plus)}添加我的物品</button></div>` : ''}
     <div class="sgrid">${list.map(card).join('') || '<div class="card empty">这一类还没有登记过物品</div>'}</div>`;
@@ -341,16 +382,10 @@ function vGuest() {
     ${backBtn('生活', 'life')}
     ${head('访客', '普通到访只要说一声；留宿会对照现在的约定，超过了也不是禁止，而是先问问大家。')}
 
-    ${S.visitAsks.length ? `${sec('等待你回应')}
-      <div class="stack">${S.visitAsks.map(a => `
-        <div class="card pad">
-          <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">${av(a.host, 'lg')}
-            <span><b style="font-family:var(--f-d);font-size:15px">${mem(a.host).name} ${a.text}</b>
-            <div style="font-size:12.5px;color:var(--ink-3);margin-top:1px">按登记记录这会是本周第 ${nightsOf(a.host) + 1} 晚，现在的约定是每周最多 ${o.limit} 晚</div></span></div>
-          <div class="btnrow"><button class="btn pri sm" data-act="visitOk" data-id="${a.id}">同意</button>
-            <button class="btn sm" data-act="visitTalk" data-id="${a.id}">想讨论一下</button></div>
-        </div>`).join('')}</div>` : ''}
-
+    ${inboxRequests().length ? `${sec('等待你回应', `${inboxRequests().length} 条`)}
+      <div class="stack">${inboxRequests().map(r => reqCard(r)).join('')}</div>` : ''}
+    ${myRequests().filter(r => r.kind === 'stay').length ? `${sec('我发出的请求')}
+      <div class="stack">${myRequests().filter(r => r.kind === 'stay').map(r => reqCard(r, true)).join('')}</div>` : ''}
     ${sec('本周访客登记', `${week.length} 条记录`, `<button class="btn pri sm" data-act="newVisit">${svg(I.plus)}登记访客</button>`)}
     <div class="card rows">${S.visits.length ? S.visits.map(v => `
       <div class="row"><div class="main">
@@ -358,7 +393,9 @@ function vGuest() {
           <span class="pill ${v.overnight ? 'info' : 'plain'}">${v.overnight ? '留宿' : '不留宿'}</span></div>
         <div class="meta">${v.date} · ${v.time}</div>
         ${srcTag(v.src)}</div>
-        <div class="right">${av(v.host)}</div></div>`).join('')
+        <div class="right">${av(v.host)}</div>
+        ${v.host === ME ? `<div class="cta"><button class="btn sm" data-act="editVisit" data-id="${v.id}">修改</button></div>` : ''}
+      </div>`).join('')
       : '<div class="empty">本周还没有访客登记</div>'}</div>
 
     ${sec('留宿次数是怎么算出来的')}
@@ -392,7 +429,9 @@ function vAway() {
         <div class="meta">${a ? `${a.from} — ${a.to}，共 ${a.days} 天` : m.room}</div>
         ${a ? srcTag(a.src) : ''}</div>
         <div class="right">${av(m.id, 'lg' + (a ? ' out' : ''))}</div>
-        ${a && m.id === ME ? `<div class="cta"><button class="btn sm" data-act="cancelAway" data-id="${a.id}">我提前回来了</button></div>` : ''}
+        ${a && m.id === ME ? `<div class="cta">
+          <button class="btn sm" data-act="editAway" data-id="${a.id}">修改</button>
+          <button class="btn sm pri" data-act="cancelAway" data-id="${a.id}">我提前回来了</button></div>` : ''}
       </div>`;
     }).join('')}</div>
     ${awayMembers().length ? `${sec('这份登记影响了什么')}
@@ -427,7 +466,8 @@ function vFacility() {
           ${L.src ? srcTag(L.src) : ''}
           <div class="btnrow" style="margin-top:11px">
             ${!L.user ? `<button class="btn pri sm" data-act="washStart">开始使用</button>`
-              : mine ? `<button class="btn pri sm" data-act="washDone">${svg(I.check)}我拿好了</button>`
+              : mine ? `<button class="btn pri sm" data-act="washDone">${svg(I.check)}我拿好了</button>
+                        <button class="btn sm" data-act="washCancel">点错了，取消</button>`
               : `<button class="btn sm ${L.notifyMe ? '' : 'pri'}" data-act="notifyWash" ${L.notifyMe ? 'disabled' : ''}>${L.notifyMe ? '已设置提醒' : '结束后提醒我'}</button>`}
           </div>
           <div class="notice" style="margin-top:11px">${svg(I.info)}<span>
@@ -454,7 +494,10 @@ function vFacility() {
         <div class="timeline">${r.timeline.map(x => `
           <div class="tlrow"><i class="${x.via}"></i><span>${x.s}</span><em>${x.at}</em>
             <span class="tlvia">${x.via === 'platform' ? '相寓' : '住户'}</span></div>`).join('')}</div>
-      </div></div>`).join('') : '<div class="empty">还没有报修记录</div>'}</div>`;
+      </div>
+      ${r.by === ME && repairState(r).s !== '已完成'
+        ? `<div class="cta"><button class="btn sm" data-act="editRepair" data-id="${r.id}">${r.timeline.length > 1 ? '补充 / 完成' : '补充 / 撤回'}</button></div>` : ''}
+      </div>`).join('') : '<div class="empty">还没有报修记录</div>'}</div>`;
 }
 
 const LIFE_VIEWS = { chore:vChore, supply:vSupply, space:vSpace, guest:vGuest, away:vAway, facility:vFacility };
@@ -483,8 +526,10 @@ function vBill() {
       </div>
       <div class="right"><div class="amt">${yuan(b.amount)}</div>
         <div class="per">${b.people.length} 人 · ${METHOD_TEXT[b.method]}</div></div>
-      <div class="cta">${b.settled
-        ? `<button class="btn sm" data-act="unsettle" data-id="${b.id}">撤销</button>`
+      <div class="cta">
+        <button class="btn sm" data-act="editBill" data-id="${b.id}">修改</button>
+        ${b.settled
+        ? `<button class="btn sm" data-act="unsettle" data-id="${b.id}">撤销结清</button>`
         : `<button class="btn sm pri" data-act="settle" data-id="${b.id}">${svg(I.check)}标记结清</button>`}</div>
     </div>`;
 
@@ -541,7 +586,7 @@ function vTalk() {
   if (S.sub) return TALK_VIEWS[S.sub]();
   const revisit = rulesToRevisit();
   const inc = incomingMember();
-  const open = S.topics.filter(t => !t.done);
+  const open = openTopics();
   const d = linDiff();
   const liveCount = open.length + (inc && revisit.length ? 1 : 0);
 
@@ -568,9 +613,12 @@ function vTalk() {
       <div class="lv-body">${living().map(m => t.votes && t.votes[m.id]
         ? `<span class="chip">${av(m.id,'sm')}${t.votes[m.id]}</span>`
         : `<span class="chip" style="opacity:.45">${av(m.id,'sm')}未表态</span>`).join('')}</div>
-      ${t.votes && t.votes[ME] ? '' : `<div class="btnrow">
+      <div class="btnrow">
+        ${t.votes && t.votes[ME] ? '' : `
         <button class="btn pri sm" data-act="agreeTopic" data-id="${t.id}">同意</button>
-        <button class="btn sm" data-act="discussTopic" data-id="${t.id}">想讨论一下</button></div>`}
+        <button class="btn sm" data-act="discussTopic" data-id="${t.id}">想讨论一下</button>`}
+        <button class="btn sm" data-act="holdTopic" data-id="${t.id}">暂不调整</button>
+      </div>
     </div>`).join('')}
 
     ${!liveCount ? '<div class="card empty">目前没有待讨论的事。有人提出新问题时会出现在这里。</div>' : ''}
@@ -583,8 +631,15 @@ function vTalk() {
           ${r.by.length < living().length ? `<span class="pill warn">${r.by.length}/${living().length} 已确认</span>` : ''}
           ${revisit.some(v => v.rule.id === r.id) ? '<span class="pill warn">新室友入住后要重新确认</span>' : ''}</div>
           <div class="rd">${r.desc}</div>
-          <div class="rd" style="color:var(--ink-4)">${r.cat} · 全员确认于 ${r.since}</div></div>
+          <div class="rd" style="color:var(--ink-4)">${r.cat} · 全员确认于 ${r.since}${r.history && r.history.length ? ` · 第 ${r.history.length + 1} 版` : ''}</div>
+          ${r.history && r.history.length ? `<div class="srctag">${svg(I.info)}上一版：${r.history[r.history.length - 1].desc}</div>` : ''}</div>
       </div>`).join('')}</div>
+
+    ${holdTopics().length ? `${sec('暂不调整', '讨论过但没达成一致，原有约定保持不变')}
+    <div class="card rows">${holdTopics().map(t => `
+      <div class="row dim"><div class="main"><div class="ttl">${t.title}<span class="pill plain">暂不调整</span></div>
+        <div class="meta">${t.heldAt} 记录 · 原有约定未改动</div></div>
+      <div class="cta"><button class="btn sm" data-act="reopenTopic" data-id="${t.id}">重新提出</button></div></div>`).join('')}</div>` : ''}
 
     ${sec('其他')}
     <div class="mods">

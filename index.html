@@ -86,8 +86,12 @@ nav{display:flex;flex-direction:column;gap:2px}
   border:1px solid var(--line);border-radius:11px;padding:11px 12px;box-shadow:var(--shadow-lg);z-index:10}
 .demopanel p{font-size:11.5px;color:var(--ink-3);line-height:1.5;margin-bottom:8px}
 .demopanel button{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;
-  padding:5px 10px;font-size:12px;color:var(--ink-2);width:100%}
+  padding:5px 10px;font-size:12px;color:var(--ink-2);width:100%;margin-top:5px}
 .demopanel button:hover{border-color:var(--ink-4);color:var(--ink)}
+.idlist{display:flex;flex-direction:column;gap:3px;margin-bottom:7px}
+.idlist button{display:flex;align-items:center;gap:7px;width:100%;background:none;border:1px solid transparent;
+  border-radius:8px;padding:5px 7px;font-size:12.5px;color:var(--ink-2);margin:0}
+.idlist button[aria-pressed="true"]{background:var(--jade-soft);border-color:var(--jade-line);color:var(--jade-ink);font-weight:600}
 main{flex:1;min-width:0}
 .wrap{max-width:880px;padding:28px 30px 72px;margin:0 auto}
 .topbar,.tabbar{display:none}
@@ -486,7 +490,9 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--jade);outline-of
     <div class="railfoot">
       <button class="idbtn" data-act="demoPanel">体验身份 <b id="meName"></b> <span aria-hidden="true">▾</span></button>
       <div class="demopanel" id="demoPanel" hidden>
-        <p>这是一个演示环境，数据只保存在你的浏览器里。</p>
+        <p>切换身份可以看到发给对方的请求，把"请求—回应"整条链走完。</p>
+        <div class="idlist" id="idList"></div>
+        <button data-act="syncPlatform">模拟相寓推送一次变更</button>
         <button data-act="reset">重置演示数据</button>
       </div>
     </div>
