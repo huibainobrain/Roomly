@@ -168,63 +168,70 @@ main{flex:1;min-width:0}
 .welcome{display:grid;grid-template-columns:minmax(260px,1fr) 1.15fr;gap:0;align-items:stretch;
   background:linear-gradient(120deg,var(--sage-soft),var(--cream) 70%);
   border:1px solid var(--sage-line);border-radius:24px;overflow:hidden;margin-bottom:16px}
-.welcome .wl-text{padding:30px 32px;display:flex;flex-direction:column;justify-content:center;gap:8px}
-.welcome h1{font-size:29px;font-weight:600;line-height:1.25;color:var(--sage-deep)}
-.welcome p{font-size:14.5px;color:var(--ink-2);max-width:30ch;line-height:1.6}
-.welcome .wl-meta{font-size:12.5px;color:var(--ink-3);margin-top:4px}
-.welcome .ph{border:0;border-radius:0;aspect-ratio:auto;background:var(--sand-2);min-height:190px}
+.welcome .wl-text{padding:22px 26px;display:flex;flex-direction:column;justify-content:center;gap:6px}
+.welcome h1{font-size:26px;font-weight:600;line-height:1.25;color:var(--sage-deep)}
+.welcome p{font-size:14px;color:var(--ink-2);max-width:30ch;line-height:1.55}
+.welcome .wl-meta{font-size:12.5px;color:var(--ink-3);margin-top:2px}
+.welcome .ph{border:0;border-radius:0;aspect-ratio:auto;background:var(--sand-2);min-height:142px}
 
-/* ---- 主栅格 ---- */
-.hgrid{display:grid;grid-template-columns:1.05fr .95fr;gap:16px;margin-bottom:16px;align-items:start}
+/* ---- 主栅格：两张卡等高，下面不留空档 ---- */
+.hgrid{display:grid;grid-template-columns:1.02fr .98fr;gap:16px;margin-bottom:16px;align-items:stretch}
 .hgrid2{display:grid;grid-template-columns:1.45fr .8fr;gap:16px;align-items:start}
 
 /* ---- 住所概览 ---- */
 .place{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:20px 22px;
-  box-shadow:var(--shadow)}
+  box-shadow:var(--shadow);display:flex;flex-direction:column}
 .place .ptop{display:flex;align-items:center;gap:8px}
 .place h2{font-size:19px;font-weight:600}
 .place .pmeta{display:flex;flex-wrap:wrap;gap:5px 16px;font-size:12.5px;color:var(--ink-3);margin-top:6px}
 .place .pmeta span{display:inline-flex;align-items:center;gap:5px}
 .place .pmeta svg{width:13px;height:13px;opacity:.6}
-.people{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap}
-.person{flex:1;min-width:76px;display:flex;flex-direction:column;align-items:center;gap:7px;
-  padding:10px 6px;border-radius:16px;transition:background .15s}
+/* 成员向左紧凑排列，不平摊整行宽度 */
+.people{display:flex;gap:4px;margin-top:auto;padding-top:16px;flex-wrap:wrap;justify-content:flex-start}
+.person{flex:0 0 auto;min-width:84px;display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:9px 6px;border-radius:16px;transition:background .15s}
 .person:hover{background:var(--sage-soft)}
 .person .pn{font-family:var(--f-d);font-weight:600;font-size:13.5px;line-height:1.2;text-align:center}
 .person .pr{font-size:11px;color:var(--ink-4)}
 .person .pst{font-size:11.5px;display:flex;align-items:center;gap:4px;color:var(--ink-3);white-space:nowrap}
 .person.me .pn{color:var(--sage-deep)}
 
-/* ---- 今天，家里怎么样（首页主卡） ---- */
-.mood{background:var(--surface);border:1px solid var(--sage-line);border-radius:22px;overflow:hidden;
-  box-shadow:var(--shadow);display:flex;flex-direction:column}
-.mood .ph{border:0;border-radius:0;aspect-ratio:16/9;background:var(--sage-soft)}
-.mood .mbody{padding:20px 22px 22px;background:linear-gradient(180deg,var(--sage-soft),var(--surface) 70%)}
+/* ---- 今天，家里怎么样（首页主卡）
+   文字在左、氛围图在右：素材左侧本来就是整片绿墙，裁掉后正好只剩沙发和猫。
+   横向排布让这张卡和左边的住所卡高度接近，不再在下方留出空档。 ---- */
+.mood{background:var(--sage-soft);border:1px solid var(--sage-line);border-radius:22px;overflow:hidden;
+  box-shadow:var(--shadow);display:grid;grid-template-columns:1fr minmax(140px,.58fr)}
+.mood .mbody{padding:20px 8px 20px 22px;display:flex;flex-direction:column;justify-content:center}
+.mood .ph{border:0;border-radius:0;aspect-ratio:auto;background:var(--sage-soft);min-height:0}
+.mood .ph img{object-position:74% 50%}
 .mood .ml{font-size:11.5px;letter-spacing:.1em;color:var(--sage);font-weight:700}
-.mood h2{font-size:23px;font-weight:600;margin-top:5px;line-height:1.3;color:var(--sage-deep)}
-.mood .mtags{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.mood h2{font-size:21px;font-weight:600;margin-top:5px;line-height:1.3;color:var(--sage-deep)}
+.mood .mtags{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
 .mood .mtags span{font-size:12.5px;font-weight:500;color:var(--peach);background:var(--peach-soft);
   border-radius:9px;padding:4px 10px}
-.mood .mglance{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:16px;padding-top:14px;
+.mood .mglance{display:flex;flex-direction:column;gap:7px;margin-top:14px;padding-top:12px;
   border-top:1px solid var(--sage-line)}
 .mood .mglance span{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-2)}
 .mood .mglance svg{width:13px;height:13px;opacity:.55}
 
-/* ---- 今日待办：小事的感觉，不是工单 ---- */
-.todos{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
-.tcard{border-radius:18px;padding:15px 16px;display:flex;flex-direction:column;gap:9px;
-  border:1px solid transparent}
+/* ---- 今日待办：小事的感觉，不是工单。
+   图标与文案同排、按钮统一贴底，四张卡在一行里高度一致，页面不被撑长。
+   中文文案比效果图长不少，四列并排会挤成每行八个字，所以走两列。 ---- */
+.todos{display:grid;grid-template-columns:1fr 1fr;gap:11px;align-items:stretch}
+.tcard{border-radius:18px;padding:14px 15px;display:grid;grid-template-columns:34px 1fr;
+  grid-template-rows:auto 1fr;column-gap:11px;row-gap:9px;border:1px solid transparent}
 .tcard.a{background:var(--sage-soft);border-color:var(--sage-line)}
 .tcard.b{background:var(--peach-soft);border-color:#EFDCC4}
 .tcard.c{background:var(--sky-soft);border-color:#CFE0EC}
 .tcard.d{background:var(--rose-soft);border-color:#EFD5CF}
-.tcard .tic{width:38px;height:38px;border-radius:13px;display:grid;place-items:center;background:var(--surface)}
-.tcard .tic svg{width:18px;height:18px}
+.tcard .tic{width:34px;height:34px;border-radius:12px;display:grid;place-items:center;background:var(--surface)}
+.tcard .tic svg{width:17px;height:17px}
 .tcard.a .tic{color:var(--sage-deep)} .tcard.b .tic{color:var(--peach)}
 .tcard.c .tic{color:var(--sky)}       .tcard.d .tic{color:var(--rose)}
-.tcard .tt{font-family:var(--f-d);font-size:15.5px;font-weight:600;line-height:1.3}
-.tcard .ts{font-size:12.5px;color:var(--ink-2);line-height:1.5}
-.tcard .tb{display:flex;gap:7px;flex-wrap:wrap;margin-top:2px}
+.tcard .tt{font-family:var(--f-d);font-size:14.5px;font-weight:600;line-height:1.35}
+.tcard .ts{font-size:12px;color:var(--ink-2);line-height:1.5;margin-top:3px}
+.tcard .tb{grid-column:2;align-self:end;display:flex;gap:6px;flex-wrap:wrap}
+.tcard .tb .btn.sm{padding:5px 10px;font-size:12.5px}
 .tcard .tb .btn{background:var(--surface);border-color:transparent;box-shadow:var(--shadow)}
 .tcard.a .tb .btn.pri{background:var(--sage);border-color:var(--sage)}
 .tcard.b .tb .btn.pri{background:var(--peach);border-color:var(--peach)}
@@ -267,19 +274,21 @@ main{flex:1;min-width:0}
 .stream .stm{font-size:11.5px;color:var(--ink-4);margin-top:2px}
 
 /* ---- 底部生活方式横幅 ---- */
-.lifeband{position:relative;margin-top:20px;border-radius:22px;overflow:hidden;
+.lifeband{position:relative;margin-top:18px;border-radius:22px;overflow:hidden;
   border:1px solid var(--sand-2);background:var(--sand)}
-.lifeband .ph{border:0;border-radius:0;aspect-ratio:auto;min-height:176px;background:var(--sand)}
+.lifeband .ph{border:0;border-radius:0;aspect-ratio:auto;min-height:126px;background:var(--sand)}
 .lifeband .ph figcaption{position:absolute;top:12px;left:0;right:0}
 .lifeband .lbtext{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  padding:24px;pointer-events:none}
-.lifeband .lbtext p{font-family:var(--f-d);font-size:19px;font-weight:600;color:var(--sage-deep);
-  text-align:center;max-width:26ch;line-height:1.55;text-shadow:0 1px 12px rgba(252,248,241,.85)}
+  padding:20px;pointer-events:none}
+.lifeband .lbtext p{font-family:var(--f-d);font-size:17.5px;font-weight:600;color:var(--sage-deep);
+  text-align:center;max-width:30ch;line-height:1.5;text-shadow:0 1px 12px rgba(252,248,241,.85)}
 
 @media (max-width:1080px){
   .hgrid,.hgrid2{grid-template-columns:1fr}
   .welcome{grid-template-columns:1fr}
   .welcome .ph{min-height:150px;order:-1}
+  /* 单栏后主卡变宽，三条概览横排更省高度 */
+  .mood .mglance{flex-direction:row;flex-wrap:wrap;gap:6px 18px}
 }
 @media (max-width:560px){
   .todos{grid-template-columns:1fr}
@@ -288,6 +297,11 @@ main{flex:1;min-width:0}
   .welcome .wl-text{padding:22px 20px}
   .welcome h1{font-size:25px}
   .lifeband .lbtext p{font-size:16.5px}
+  /* 窄屏把主卡改回上图下文，右侧窄栏会把画面裁得太碎 */
+  .mood{grid-template-columns:1fr}
+  .mood .ph{aspect-ratio:16/9;order:-1}
+  .mood .ph img{object-position:50% 50%}
+  .mood .mbody{padding:18px 20px 20px}
 }
 
 /* ============ 首页：轻量成员状态栏 + Hero ============ */
@@ -307,8 +321,6 @@ main{flex:1;min-width:0}
 .glance{display:flex;flex-wrap:wrap;gap:5px 16px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
 .gl{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-3);white-space:nowrap}
 .gl svg{width:13px;height:13px;opacity:.5}
-
-.todos{display:grid;grid-template-columns:1fr 1fr;gap:11px;align-items:start}
 
 /* ============ todo cards ============ */
 .todo{display:flex;gap:12px;padding:15px 16px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}

@@ -121,7 +121,6 @@ function vHome() {
     </section>
 
     <section class="mood">
-      ${imgSlot('img/home-mood.jpg', '待补首页主视觉<br>沙发 · 猫 · 绿植 · 午后光线')}
       <div class="mbody">
         <div class="ml">今天，家里怎么样</div>
         <h2>${calm ? '一切正常，没有需要协调的事' : `有 ${watch.length} 件事值得留意`}</h2>
@@ -132,6 +131,7 @@ function vHome() {
           <span>${svg(I.talk)}${revisit.length} 条约定待确认</span>
         </div>
       </div>
+      ${imgSlot('img/home-mood.jpg', '待补首页主视觉<br>沙发 · 猫 · 绿植 · 午后光线')}
     </section>
   </div>
 
