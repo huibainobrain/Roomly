@@ -673,76 +673,147 @@ const LIFE_VIEWS = { chore:vChore, supply:vSupply, space:vSpace, guest:vGuest, a
    ============================================================ */
 const METHOD_TEXT = { even:'平均分摊', days:'按登记在住天数', ratio:'按比例', custom:'自定义' };
 
+/* 账单页：算清楚不是为了斤斤计较，而是为了让长期一起住更轻松。
+   顶部是管家发现的公平问题，中间是本月怎么结、右侧是记账入口，下面是每一笔记录。
+   所有金额都来自 bills / netSettlement / fairByDays，页面不写死数字。 */
 function vBill() {
-  const net = netSettlement();
-  const away = awayMembers();
-  const fd = fairByDays();
+  const net = netSettlement(), away = awayMembers(), fd = fairByDays();
+  const open = openBills(), month = TODAY.split('月')[0] + '月';
+  const pending = away.length && !S.fairApplied;
 
-  const billRow = b => `
-    <div class="row ${b.settled ? 'dim' : ''}">
-      <div class="main">
-        <div class="ttl">${b.title}
-          <span class="pill ${b.settled ? 'ok' : 'warn'}">${b.settled ? '已结清' : '待结算'}</span>
-          ${b.method !== 'even' ? `<span class="pill info">${METHOD_TEXT[b.method]}</span>` : ''}
-          ${b.people.length < living().length ? '<span class="pill plain">部分成员</span>' : ''}
+  /* 每个人的应付 / 应收：应付 = 别人垫付里我的份额，应收 = 我垫付里别人的份额 */
+  const gross = {};
+  living().forEach(m => gross[m.id] = { pay:0, recv:0 });
+  open.forEach(b => b.people.forEach(p => {
+    if (p === b.payer || !gross[p]) return;
+    gross[p].pay += shareOf(b, p);
+    if (gross[b.payer]) gross[b.payer].recv += shareOf(b, p);
+  }));
+
+  const fairCard = pending ? `
+    <div class="fairhero">
+      <span class="fhi">${svg(I.spark)}</span>
+      <div class="fhb">
+        <h2>${S.utilityForecast.title}，要不要按登记在住天数来分？</h2>
+        <p>${away.map(a => `${mem(a.who).name} 登记了 ${a.from} — ${a.to} 离家，共 ${a.days} 天`).join('；')}。
+          ${S.utilityForecast.title}预计 ${yuan(S.utilityForecast.amount)}，如果仍按 ${living().length} 人平均，可能和大家的实际使用有出入。</p>
+        <div class="btnrow">
+          <button class="btn pri" data-act="applyFair">采用这个方案</button>
+          <button class="btn" data-act="keepEven">仍按平均分摊</button>
         </div>
-        <div class="meta">${b.note ? b.note + ' · ' : ''}${b.date} · ${mem(b.payer).name} 垫付</div>
-        <div class="split">${b.people.map(p => `<span class="chip">${av(p, 'sm')}${yuan(shareOf(b, p))}</span>`).join('')}</div>
-        ${b.src ? srcTag({ via:'member', by:b.src.by, at:b.src.at }) + `<span class="srctag">${BILL_SRC[b.src.via]}</span>` : ''}
+        <div class="fhf">这只是一个建议，分摊方式由你们自己决定，系统不会替你们改。${srcTag({ via:'derived', note:'按成员登记的离家时间计算，系统不掌握真实居住情况' })}</div>
       </div>
-      <div class="right"><div class="amt">${yuan(b.amount)}</div>
-        <div class="per">${b.people.length} 人 · ${METHOD_TEXT[b.method]}</div></div>
-      <div class="cta">
+    </div>` : `
+    <div class="fairdone">${svg(I.check)}<span>${S.fairApplied
+      ? `${S.utilityForecast.title}${S.bills.some(b => b.method === 'days') ? '已按登记在住天数计算，并加入下方账单' : '按平均分摊，大家已确认'}。其他费用维持原有方式。`
+      : '这个月没有人登记离家，公共费用按平均分摊。'}</span></div>`;
+
+  const fairPeople = pending ? `
+    <div class="fairpeople">
+      <div class="fpl">按登记在住天数，${S.utilityForecast.title}会是</div>
+      <div class="fps">${fd.rows.map(r => `<div class="fp">
+        ${av(r.id, 'xl')}<b>${mem(r.id).name}</b>
+        <span class="fpa">${yuan(r.amount)}</span>
+        <span class="fpd">登记在住 ${r.days} 天${r.off ? `<br>离家 ${r.off} 天` : ''}</span></div>`).join('')}</div>
+    </div>` : '';
+
+  /* ---- 每一笔记录 ---- */
+  const scope = b => b.people.length < living().length ? `${b.people.length} 人分` : METHOD_TEXT[b.method];
+  const billRow = b => `
+    <div class="brow ${b.settled ? 'done' : ''}">
+      <div class="bdate">${b.date}</div>
+      <div class="bwhat"><b>${b.title}</b>${b.note ? `<span>${b.note}</span>` : ''}</div>
+      <div class="bchips"><span class="bchip ${b.method === 'days' ? 'sage' : b.people.length < living().length ? 'sky' : ''}">${scope(b)}</span>
+        ${b.src && b.src.via !== 'manual' ? `<span class="bchip src">${b.src.via === 'supply' ? '补货自动生成' : '管家记录'}</span>` : ''}</div>
+      <div class="bpayer">${av(b.payer, 'sm')}<span>${mem(b.payer).name}${b.payer === ME ? '（你）' : ''} 垫付</span></div>
+      <div class="bpeople">${b.people.map(p => av(p, 'sm')).join('')}<span>${b.shares ? `${b.people.length} 人 · 各不相同` : perLabel(b)}</span></div>
+      <div class="bamt">${yuan(b.amount)}</div>
+      <div class="bstate"><span class="pill ${b.settled ? 'ok' : 'warn'}">${b.settled ? '已结清' : '待结算'}</span></div>
+      <div class="bact">
         <button class="btn sm" data-act="editBill" data-id="${b.id}">修改</button>
         ${b.settled
-        ? `<button class="btn sm" data-act="unsettle" data-id="${b.id}">撤销结清</button>`
-        : `<button class="btn sm pri" data-act="settle" data-id="${b.id}">${svg(I.check)}标记结清</button>`}</div>
+          ? `<button class="btn sm" data-act="unsettle" data-id="${b.id}">撤销结清</button>`
+          : `<button class="btn sm pri" data-act="settle" data-id="${b.id}">${svg(I.check)}标记结清</button>`}
+      </div>
     </div>`;
 
+  const netLabel = id => {
+    const v = net.balances[id] || 0;
+    return Math.abs(v) < 0.005 ? '<span class="pill ok">已两清</span>'
+      : v < 0 ? `<span class="pill warn">还需付 ${yuan(-v)}</span>` : `<span class="pill info">可收回 ${yuan(v)}</span>`;
+  };
+
   return `
-    ${head('账单', '每一笔都能解释清楚为什么这样算、是谁记的。月末只结净额，不为了几十块钱来回转账。')}
-
-    ${away.length && !S.fairApplied ? `
-    <div class="fair" style="margin-bottom:14px">
-      <div class="fh">${svg(I.scale)}一个可能影响公平的情况</div>
-      <p>${away.map(a => `${mem(a.who).name} 登记了 ${a.days} 天离家（${a.from} — ${a.to}）`).join('；')}。
-         ${S.utilityForecast.title}（预计 ${yuan(S.utilityForecast.amount)}）如果仍按三人平均，可能和大家的使用情况有出入。</p>
-      <div class="calcbox">
-        <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin-bottom:4px">按登记在住天数计算</div>
-        ${fd.rows.map(r => `<div class="calcline">
-          <span class="cl">${av(r.id, 'sm')}${mem(r.id).name}<span class="cd">${r.days} 天${r.off ? ` · 登记离家 ${r.off} 天` : ''}</span></span>
-          <span class="cv">${yuan(r.amount)}</span></div>`).join('')}
-      </div>
-      ${srcTag({ via:'derived', note:'根据成员登记的离家时间计算，系统不掌握真实居住情况' })}
-      <div class="btnrow" style="margin-top:11px">
-        <button class="btn pri sm" data-act="applyFair">采用这个方案</button>
-        <button class="btn sm" data-act="keepEven">仍按平均分摊</button>
-      </div>
-      <p style="font-size:12px;color:var(--ink-3);margin-top:9px">这只是一个建议。分摊方式需要你们自己决定，系统不会替你们改。</p>
-    </div>` : ''}
-
-    ${S.fairApplied ? `<div class="notice" style="margin-bottom:14px">${svg(I.check)}<span>${S.utilityForecast.title}已按登记在住天数计算，并加入下方账单。其他费用维持原有方式。</span></div>` : ''}
-
-    ${sec('我的账目')}
-    <div class="card pad" style="margin-bottom:4px">
-      <div class="calcline"><span class="cl">待我支付</span><span class="cv">${yuan(myDueTotal())}</span></div>
-      <div class="calcline"><span class="cl">本月共同支出</span><span class="cv">${yuan(monthTotal())}</span></div>
-      <div class="calcline"><span class="cl">未结清笔数</span><span class="cv">${openBills().length} 笔</span></div>
+  <section class="bhero">
+    <div class="bh-left">
+      <div class="bh-head"><h1>账单</h1><p>让每一笔花费都清晰透明，合租更安心。</p></div>
+      ${fairCard}
     </div>
-
-    ${sec('月末净额结算', '由未结清账单自动抵消')}
-    <div class="card rows">
-      ${net.transfers.length ? net.transfers.map(t => `
-        <div class="netrow"><span class="arrow">${av(t.from)}<b>${mem(t.from).name}</b>${svg(I.arrow)}${av(t.to)}<b>${mem(t.to).name}</b></span>
-          <span class="amt">${yuan(t.amount)}</span></div>`).join('')
-        : '<div class="empty">当前没有需要结算的净额</div>'}
+    <div class="bh-right">
+      ${imgSlot('img/bill-hero.jpg', '待补账单页主视觉<br>阳光房间 · 绿植 · 木质家具 · 装饰画')}
+      ${fairPeople}
     </div>
-    ${net.deferred.length ? `<div class="notice" style="margin-top:10px">${svg(I.info)}<span>
-      ${net.deferred.map(t => `${mem(t.from).name} → ${mem(t.to).name} ${yuan(t.amount)}`).join('，')}
-      金额低于 ¥10，已自动滚入下月抵消。</span></div>` : ''}
+  </section>
 
-    ${sec('费用记录', '', `<button class="btn pri sm" data-act="newBill">${svg(I.plus)}记一笔</button>`)}
-    <div class="card rows">${S.bills.map(billRow).join('')}</div>`;
+  <section class="bstats">
+    <div class="bst peach"><span class="bsi">${svg(I.bill)}</span><div>
+      <div class="bsl">待我支付</div><div class="bsv">${yuan(myDueTotal())}</div>
+      <div class="bss">${myDue().length ? `${myDue().length} 笔别人垫付的份额` : '暂时没有要付的'}</div></div></div>
+    <div class="bst sky"><span class="bsi">${svg(I.scale)}</span><div>
+      <div class="bsl">本月共同支出</div><div class="bsv">${yuan(monthTotal())}</div>
+      <div class="bss">${S.bills.length} 笔支出</div></div></div>
+    <div class="bst sage"><span class="bsi">${svg(I.check)}</span><div>
+      <div class="bsl">未结清</div><div class="bsv">${open.length} <small>笔</small></div>
+      <div class="bss">月末按净额一次结清</div></div></div>
+    <div class="bquote">
+      <p>AA 不只是付钱，<br>更是互相理解的生活方式。</p>
+      ${imgSlot('img/bill-tip.jpg', '待补小贴士插画')}
+    </div>
+  </section>
+
+  <div class="bgrid">
+    <section class="bsettle">
+      <div class="bs-head"><h2>本月结算</h2><span class="bs-month">${month}</span>
+        <span class="bs-hint">未结清的 ${open.length} 笔账单自动抵消后的净额</span></div>
+      <div class="bs-body">
+        <ul class="bs-rows">${living().map(m => `<li>
+          ${av(m.id, 'lg')}
+          <div class="bsn"><b>${m.name}${m.id === ME ? '（你）' : ''}</b>
+            <span>应付 ${yuan(gross[m.id].pay)} <i>·</i> 应收 ${yuan(gross[m.id].recv)}</span></div>
+          ${netLabel(m.id)}</li>`).join('')}</ul>
+        <figure class="ph bs-art">
+          <img src="img/bill-settle.jpg" alt="" onload="this.parentNode.classList.add('ok')" onerror="this.remove()">
+          <figcaption>待补结算区插画<br>小桌 · 绿植 · 阳光</figcaption>
+          <div class="bs-quote"><p>算清楚，<br>是为了走得更远。</p></div>
+        </figure>
+      </div>
+      <div class="bs-foot">
+        ${net.transfers.length ? `<div class="bs-tl">最省事的结法</div>
+          <div class="bs-trs">${net.transfers.map(t => `<span class="bs-tr">${av(t.from, 'sm')}<b>${mem(t.from).name}</b>${svg(I.arrow)}${av(t.to, 'sm')}<b>${mem(t.to).name}</b><em>${yuan(t.amount)}</em></span>`).join('')}</div>`
+          : '<div class="bs-tl">当前没有需要转账的净额</div>'}
+        ${net.deferred.length ? `<div class="bs-def">${svg(I.info)}${net.deferred.map(t => `${mem(t.from).name} → ${mem(t.to).name} ${yuan(t.amount)}`).join('，')} 不到 ¥10，自动滚入下月一起算，不用来回转。</div>` : ''}
+      </div>
+    </section>
+
+    <aside class="bside">
+      <section class="bquick">
+        <h3>快速操作</h3>
+        <button class="btn pri big" data-act="newBill">${svg(I.plus)}记一笔新支出</button>
+        <div class="bq-or">或者直接跟管家说</div>
+        <div class="b2in"><input type="text" id="butlerIn" placeholder="比如：我买了 48 块的洗衣液，三个人平分" aria-label="跟管家说一句">
+          <button data-act="butlerGo" aria-label="发送">${svg(I.arrow)}</button></div>
+        <div class="b2q"><button data-act="butlerFill" data-text="我刚买了29块9的厕纸，12卷，三个人平分">${svg(I.box)}我买了公共用品</button></div>
+      </section>
+      <section class="btips">
+        <span class="bti">${svg(I.info)}</span>
+        <div><b>记账时可以只选参与的人</b>
+          <p>阳台材料这种只有两个人用的，选两个人分就好；有人不在家的月份，水电可以改成按登记在住天数分。月末只结净额，几十块不用来回转。</p></div>
+      </section>
+    </aside>
+  </div>
+
+  ${sec('账单记录', `${S.bills.length} 笔 · 每一笔都能看到谁记的、为什么这样分`)}
+  <section class="blist">${S.bills.length ? S.bills.map(billRow).join('') : '<div class="empty">这个月还没有公共支出</div>'}</section>`;
 }
 
 /* ============================================================

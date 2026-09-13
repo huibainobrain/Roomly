@@ -10,8 +10,8 @@ const mySrc = () => ({ via:'member', by:ME, at:stamp() });
 
 function render() {
   /* 首页用更宽的版心，其他页面保持原样 */
-  /* 首页和生活页总览用宽版心，子页面和其他页面保持 880px */
-  document.querySelector('.wrap').classList.toggle('wide', S.tab === 'home' || (S.tab === 'life' && !S.sub));
+  /* 首页、生活页总览和账单页用宽版心，子页面和其他页面保持 880px */
+  document.querySelector('.wrap').classList.toggle('wide', S.tab === 'home' || S.tab === 'bill' || (S.tab === 'life' && !S.sub));
   document.getElementById('view').innerHTML = VIEWS[S.tab]();
 
   document.getElementById('nav').innerHTML = TABS.map(t => {
