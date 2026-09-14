@@ -84,13 +84,13 @@ document.addEventListener('click', e => {
     render(); toast(`已切换到 ${mem(ME).name} 的视角，可以看到发给他的请求`);
     break;
   }
-  /* 相寓侧的变更由平台推送，住户不能自己改 */
+  /* 租房中介侧的变更由平台推送，住户不能自己改 */
   case 'syncPlatform': {
     const lin = MEMBERS.find(m => m.id === 'lin');
     lin.joined = lin.joined === '9月20日' ? '9月25日' : '9月20日';
     lin.lease = { via:'platform', at:stamp() };
-    logFeed('sys', `相寓更新了 ${lin.name} 的入住日期：${lin.joined}`);
-    render(); toast(`相寓已同步：${lin.name} 改为 ${lin.joined} 入住，相关页面已全部更新`);
+    logFeed('sys', `租房中介更新了 ${lin.name} 的入住日期：${lin.joined}`);
+    render(); toast(`租房中介已同步：${lin.name} 改为 ${lin.joined} 入住，相关页面已全部更新`);
     break;
   }
 
@@ -167,7 +167,7 @@ document.addEventListener('click', e => {
     const r = S.repairs.find(x => x.id === sheetEl().dataset.rid);
     const add = document.getElementById('er-d').value.trim();
     if (add) { r.timeline.push({ s:'住户补充：' + add, at:stamp(), via:'member' }); logFeed(ME, `补充了报修说明：${add}`); }
-    closeSheet(); render(); toast(add ? '已补充，相寓会看到这条说明' : '没有补充内容');
+    closeSheet(); render(); toast(add ? '已补充，租房中介会看到这条说明' : '没有补充内容');
     break;
   }
   case 'delRepair': {
@@ -462,12 +462,12 @@ document.addEventListener('click', e => {
     S.repairs.unshift({ id:rid, place, desc, by:ME, timeline:[{ s:'已提交', at:stamp(), via:'member' }] });
     logFeed(ME, `提交了报修：${desc}`);
     closeSheet(); goTo('life', 'facility');
-    toast('报修单已提交，相寓受理后状态会自动同步回来');
+    toast('报修单已提交，租房中介受理后状态会自动同步回来');
     setTimeout(() => {
       const r = S.repairs.find(x => x.id === rid);
       if (r && r.timeline.length === 1) {
         r.timeline.push({ s:'管家已受理', at:stamp(), via:'platform' });
-        logFeed('sys', `相寓已受理报修：${r.desc}`);
+        logFeed('sys', `租房中介已受理报修：${r.desc}`);
         render(); toast(`${HOUSE.steward}已受理，稍后会安排上门时间`);
       }
     }, 2800);
@@ -878,7 +878,7 @@ function defaultMoveout() {
     { id:'m2', t:'带走私人物品',   m:'02室 · 冰箱上层 · 鞋柜 A 区', done:false },
     { id:'m3', t:'公共资产权益结算', m:'共同购买的电水壶、晾衣架', done:false },
     { id:'m4', t:'清空并清洁分区', m:'交还前恢复原状', done:false },
-    { id:'m5', t:'归还钥匙与门禁卡', m:'交回相寓管家', done:false },
+    { id:'m5', t:'归还钥匙与门禁卡', m:'交回租房中介的管家', done:false },
     { id:'m6', t:'退出值日轮换',   m:'剩余任务重新分配', done:false }
   ] };
 }

@@ -18,17 +18,17 @@ const TOMORROW = { date:'9月13日', wd:'周日' };
 
 const HOUSE = {
   name: '望京西园三区 · 503',
-  org: '相寓 · 托管房源',
+  org: '租房中介 · 托管房源',
   steward: '陈管家',
   /* 保洁由机构排期，住户不手动新增 */
   clean: { next:'周四 10:00', src:{ via:'platform', at:'9月9日' } }
 };
 
 /* ---------- 来源标记 ---------- */
-const VIA_LABEL = { member:'成员登记', shared:'共同设定', derived:'系统推导', platform:'相寓同步' };
+const VIA_LABEL = { member:'成员登记', shared:'共同设定', derived:'系统推导', platform:'租房中介同步' };
 function srcNote(s) {
   if (!s) return '';
-  if (s.via === 'platform') return `相寓同步${s.at ? ' · ' + s.at : ''}`;
+  if (s.via === 'platform') return `租房中介同步${s.at ? ' · ' + s.at : ''}`;
   if (s.via === 'derived')  return s.note || '系统根据已有记录计算';
   if (s.via === 'shared')   return `全员共同设定${s.at ? ' · ' + s.at : ''}`;
   return `${mem(s.by).name} · ${s.at}`;
@@ -300,7 +300,7 @@ const SEED = {
   feed: [
     { who:'alex',  text:'把厕纸库存更新为 <b>2 卷</b>', t:'今天 18:20' },
     { who:'alex',  text:'完成了值日「卫生间简单整理」', t:'今天 09:20' },
-    { who:'sys',   text:'相寓更新了报修进度：师傅预计周三上门', t:'今天 09:20' },
+    { who:'sys',   text:'租房中介更新了报修进度：师傅预计周三上门', t:'今天 09:20' },
     { who:'alex',  text:'登记了今晚 19:00–22:00 的访客', t:'昨天 21:10' },
     { who:'yiming',text:'提交了报修：厨房灯不亮', t:'9月11日 20:30' },
     { who:'tom',   text:'登记了离家：9月8日 — 9月18日', t:'9月7日 22:10' }
@@ -326,6 +326,8 @@ try {
   const complete = raw && ['bills','rules','spaces','completions','requests','repairs','visits']
     .every(k => Array.isArray(raw[k]));
   S = complete ? raw : structuredClone(SEED);
+  /* 机构名称改过：老存档里的动态、清单文案一并换掉 */
+  if (complete && JSON.stringify(raw).includes('相寓')) S = JSON.parse(JSON.stringify(raw).split('相寓').join('租房中介'));
 } catch (e) { S = structuredClone(SEED); }
 /* 补齐后来新增的可选字段，老存档也能正常跑 */
 Object.keys(SEED).forEach(k => { if (S[k] === undefined) S[k] = structuredClone(SEED[k]); });

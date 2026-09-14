@@ -222,13 +222,13 @@ function vLife() {
     .map(t => ({ task:t, title:t.task, sub:taskSub(t) }));
 
   const next = [];
-  if (rp) next.push({ tone:'peach', title:rp.desc, sub:`${repairState(rp).s} · 相寓` });
-  next.push({ tone:'sage', title:'公区保洁', sub:`${HOUSE.clean.next} · 相寓排期` });
+  if (rp) next.push({ tone:'peach', title:rp.desc, sub:`${repairState(rp).s} · 租房中介` });
+  next.push({ tone:'sage', title:'公区保洁', sub:`${HOUSE.clean.next} · 租房中介排期` });
   /* 负责人登记离家中的任务已暂缓，不算"会发生的事"，留在值日页里 */
   S.tasks.filter(t => !t.done && !taskPaused(t) && !['今天', TOMORROW.wd].includes(t.due)).forEach(t => next.push({
     task:t, title:t.task, sub:`${t.due} · ${mem(t.who).name} 负责` }));
   away.forEach(a => next.push({ tone:'sage', title:`${mem(a.who).name} 回来`, sub:`${a.to} · 本人登记` }));
-  if (inc) next.push({ tone:'peach', title:`${inc.name} 入住 ${inc.room}`, sub:`${inc.joined} · 相寓同步` });
+  if (inc) next.push({ tone:'peach', title:`${inc.name} 入住 ${inc.room}`, sub:`${inc.joined} · 租房中介同步` });
 
   const col = (title, date, list, empty) => `<div class="agcol">
     <div class="agh"><b>${title}</b><span>${date}</span></div>
@@ -642,7 +642,7 @@ function vFacility() {
       </div>
     </div>
 
-    ${sec('房屋服务', '由相寓提供，住户不手动维护', `<button class="btn pri sm" data-act="newRepair">${svg(I.plus)}我要报修</button>`)}
+    ${sec('房屋服务', '由租房中介提供，住户不手动维护', `<button class="btn pri sm" data-act="newRepair">${svg(I.plus)}我要报修</button>`)}
     <div class="card rows">
       <div class="row"><div class="main"><div class="ttl">公区保洁</div>
         <div class="meta">客厅、厨房、卫生间，无需自己打扫</div>
@@ -659,7 +659,7 @@ function vFacility() {
         <div class="meta">${r.place} · ${mem(r.by).name} 提交</div>
         <div class="timeline">${r.timeline.map(x => `
           <div class="tlrow"><i class="${x.via}"></i><span>${x.s}</span><em>${x.at}</em>
-            <span class="tlvia">${x.via === 'platform' ? '相寓' : '住户'}</span></div>`).join('')}</div>
+            <span class="tlvia">${x.via === 'platform' ? '租房中介' : '住户'}</span></div>`).join('')}</div>
       </div>
       ${r.by === ME && repairState(r).s !== '已完成'
         ? `<div class="cta"><button class="btn sm" data-act="editRepair" data-id="${r.id}">${r.timeline.length > 1 ? '补充 / 完成' : '补充 / 撤回'}</button></div>` : ''}
@@ -1355,7 +1355,7 @@ function vMoveout() {
     <div class="card rows" style="margin-bottom:12px">
       ${mo.items.map(i => `<div class="chk ${i.done ? 'on' : ''}" data-act="moveChk" data-id="${i.id}" role="button" tabindex="0">
         <span class="box">${svg(I.check, 2.6)}</span><span class="ct">${i.t}</span><span class="cm">${i.m}</span></div>`).join('')}
-      <div class="chk final"><span class="box">${svg(I.clock, 2.2)}</span><span class="ct">与租赁机构确认退租</span><span class="cm">由${org}${HOUSE.steward}确认，App 不能代替</span></div>
+      <div class="chk final"><span class="box">${svg(I.clock, 2.2)}</span><span class="ct">与租赁机构确认退租</span><span class="cm">由${org}（${HOUSE.steward}）确认，App 不能代替</span></div>
     </div>
     <div class="card pad" style="border-color:var(--sage-line)">
       <b style="font-family:var(--f-d);font-size:15px">${all ? `准备已完成，正在等待${org}确认退租` : '完成清单，不等于已经退租'}</b>

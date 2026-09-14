@@ -558,14 +558,14 @@ function washSheet() {
     <div class="acts"><button class="btn" data-act="close">取消</button></div>`);
 }
 
-/* 报修：住户提交，之后由相寓更新进度 */
+/* 报修：住户提交，之后由租房中介更新进度 */
 function repairSheet() {
   openSheet(`<h3>我要报修</h3>
-    <p class="hint">提交后由相寓受理并安排维修，处理进度会同步回来，你不用自己跟进。</p>
+    <p class="hint">提交后由租房中介受理并安排维修，处理进度会同步回来，你不用自己跟进。</p>
     <div class="fld"><label for="rpp">问题位置</label><select id="rpp">
       <option>厨房</option><option>卫生间</option><option>门锁</option><option>家电</option><option>其他</option></select></div>
     <div class="fld"><label for="rpd">问题描述</label><input type="text" id="rpd" placeholder="例如：厨房灯不亮了"></div>
-    ${impactBox(['生成一张报修单，状态为「已提交」', '相寓受理后状态会自动更新', '维修安排会显示在生活页和我的页', '这次提交会记进家里动态'])}
+    ${impactBox(['生成一张报修单，状态为「已提交」', '租房中介受理后状态会自动更新', '维修安排会显示在生活页和我的页', '这次提交会记进家里动态'])}
     ${acts('doRepair', '提交报修')}`);
 }
 
@@ -693,7 +693,7 @@ function editRepairSheet(id) {
   const r = S.repairs.find(x => x.id === id);
   const accepted = r.timeline.length > 1;
   openSheet(`<h3>${r.desc}</h3>
-    <p class="hint">${accepted ? '相寓已经受理，这时只能补充说明，不能再撤回。' : '还没有被受理，可以补充描述或撤回这张单。'}</p>
+    <p class="hint">${accepted ? '租房中介已经受理，这时只能补充说明，不能再撤回。' : '还没有被受理，可以补充描述或撤回这张单。'}</p>
     <div class="fld"><label for="er-d">补充说明</label><input type="text" id="er-d" placeholder="例如：换过灯泡还是不亮"></div>
     <div class="acts">
       ${accepted
