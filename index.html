@@ -624,6 +624,146 @@ main{flex:1;min-width:0}
   .bh-head h1{font-size:26px}
 }
 
+/* ============================================================
+   共识页
+   新室友 Hero（文字左、场景图右）→ 正在讨论（两张有场景的议题卡）→ 我们已经说好的（轻量行）
+   右侧：发起讨论 / 小贴士 / 三个入口 / 氛围图。共识是过程，规则只是结果。
+   ============================================================ */
+.pill.sky{background:var(--sky-soft);color:var(--sky);border-color:color-mix(in srgb,var(--sky) 35%,transparent)}
+.pill.peach{background:var(--peach-soft);color:var(--peach);border-color:color-mix(in srgb,var(--peach) 32%,transparent)}
+.pill.warm{background:var(--peach-soft);color:var(--peach);border-color:transparent}
+
+.thero{display:grid;grid-template-columns:1.15fr .95fr;align-items:stretch;background:linear-gradient(115deg,var(--sage-soft),var(--cream) 78%);
+  border:1px solid var(--sage-line);border-radius:24px;overflow:hidden;margin-bottom:18px}
+.th-left{display:flex;gap:18px;align-items:center;padding:24px 26px}
+.th-left .av.xxl{width:64px;height:64px;font-size:21px;flex:none}
+.th-text h1{font-size:23px;font-weight:600;line-height:1.3;color:var(--sage-deep)}
+.th-text p{font-size:13.5px;color:var(--ink-2);margin-top:5px;line-height:1.55;max-width:34ch}
+.th-cmp{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}
+.th-cmp span{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;border-radius:999px;padding:5px 12px 5px 9px;background:var(--surface);box-shadow:var(--shadow)}
+.th-cmp span svg{width:13px;height:13px}
+.th-cmp .ok{color:var(--sage-deep)} .th-cmp .talk{color:var(--peach)}
+.th-text .btnrow{margin-top:13px;align-items:center}
+.th-text .btn.pri{background:var(--sage);border-color:var(--sage)}
+.th-text .btn.pri:hover{background:var(--sage-deep);border-color:var(--sage-deep)}
+.th-hint{font-size:12px;color:var(--ink-3)}
+.th-note{display:inline-flex;align-items:center;gap:6px;margin-top:13px;font-size:12.5px;color:var(--sage-deep);background:var(--surface);border-radius:999px;padding:6px 12px;box-shadow:var(--shadow)}
+.th-note svg{width:13px;height:13px}
+.thero .ph{border:0;border-radius:0;aspect-ratio:auto;min-height:170px;background:var(--sand-2)}
+.thero .ph img{object-position:55% 50%}
+
+.tgrid{display:grid;grid-template-columns:1.7fr .8fr;gap:16px;align-items:start}
+.tmain{display:flex;flex-direction:column;gap:16px;min-width:0}
+.tsec{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:18px 20px 18px;box-shadow:var(--shadow)}
+.tk-h{display:flex;gap:12px;align-items:flex-start;margin-bottom:14px}
+.tk-hi{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;flex:none}
+.tk-hi svg{width:18px;height:18px}
+.tk-hi.peach{background:var(--peach-soft);color:var(--peach)}
+.tk-hi.sage{background:var(--sage-soft);color:var(--sage-deep)}
+.tk-hi.plain{background:var(--surface-2);color:var(--ink-3)}
+.tk-h h2{font-size:18px;font-weight:600;line-height:1.3}
+.tk-h p{font-size:12.5px;color:var(--ink-3);margin-top:3px;line-height:1.5}
+.tk-h>div{flex:1;min-width:0}
+.tk-hc{font-size:12.5px;color:var(--ink-3);flex:none;padding-top:8px}
+.tk-empty{background:var(--cream);border:1px dashed var(--sand-2);border-radius:16px;padding:18px;text-align:center;font-size:13px;color:var(--ink-3)}
+
+/* 议题卡：上半是生活场景，下半是讨论内容 */
+.tk-topics{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tk-topic{border-radius:20px;overflow:hidden;background:var(--cream);border:1px solid var(--sand-2);display:flex;flex-direction:column}
+.tk-art{border:0;border-radius:0;aspect-ratio:2.3/1;min-height:0;background:var(--sand)}
+.tk-body{padding:14px 16px 15px;display:flex;flex-direction:column;gap:9px;flex:1}
+.tk-th{display:flex;align-items:center;gap:9px}
+.tk-th h3{font-size:16px;font-weight:600;flex:1;line-height:1.3}
+.tk-ic{width:34px;height:34px;border-radius:12px;background:var(--surface);color:var(--sage-deep);display:grid;place-items:center;flex:none;box-shadow:var(--shadow)}
+.tk-ic svg{width:17px;height:17px}
+.tk-vals{display:flex;flex-wrap:wrap;gap:6px}
+.tk-vals span{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--ink-3);background:var(--surface);border-radius:999px;padding:4px 11px 4px 9px;box-shadow:var(--shadow)}
+.tk-vals span b{color:var(--ink);font-family:var(--f-d);font-weight:600}
+.tk-vals span .av{margin-right:1px}
+.tk-sub{font-size:12.5px;color:var(--ink-2);line-height:1.55}
+.tk-say{display:flex;gap:8px;align-items:flex-start;background:var(--surface);border-radius:14px;padding:10px 12px;font-size:12.5px;color:var(--ink-2);line-height:1.55;border-left:3px solid var(--sage-line)}
+.tk-say i{width:20px;height:20px;border-radius:7px;background:var(--sage-soft);color:var(--sage-deep);display:grid;place-items:center;flex:none;margin-top:1px}
+.tk-say i svg{width:12px;height:12px}
+.tk-stances{display:flex;flex-wrap:wrap;gap:5px}
+.tk-st{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-3);background:var(--surface-2);border-radius:999px;padding:3px 10px 3px 4px}
+.tk-st.on{background:var(--sage-soft);color:var(--sage-deep);font-weight:500}
+.tk-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;padding-top:4px}
+.tk-who{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-3)}
+.tk-who em{font-style:normal}
+.tk-avs{display:inline-flex;flex:none}
+.tk-avs .av{margin-left:-6px;box-shadow:0 0 0 2px var(--cream)}
+.tk-avs .av:first-child{margin-left:0}
+.tk-topic .tk-foot .lcgo{margin-left:0}
+.tk-acts{margin-top:2px}
+.tk-acts .btn.pri{background:var(--sage);border-color:var(--sage)}
+.tk-acts .btn.pri:hover{background:var(--sage-deep);border-color:var(--sage-deep)}
+.tk-acts .btn:not(.pri){background:var(--surface);border-color:transparent;box-shadow:var(--shadow)}
+
+/* 已经说好的：一行一条，很轻 */
+.tk-rules{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.tk-rule{display:grid;grid-template-columns:32px 1fr auto auto auto;gap:12px;align-items:center;padding:11px 0;border-top:1px dashed var(--line)}
+.tk-rule:first-child{border-top:0;padding-top:4px}
+.tk-ri{width:32px;height:32px;border-radius:11px;background:var(--sage-soft);color:var(--sage-deep);display:grid;place-items:center}
+.tk-ri svg{width:15px;height:15px}
+.tk-rt{min-width:0}
+.tk-rt b{font-family:var(--f-d);font-size:14px;font-weight:600;display:block;line-height:1.3}
+.tk-rt span{font-size:12.5px;color:var(--ink-3);display:block;line-height:1.5;margin-top:1px}
+.tk-rt em{font-style:normal;font-size:11.5px;color:var(--ink-4);display:block;margin-top:2px}
+.tk-rule .tk-avs .av{box-shadow:0 0 0 2px var(--surface)}
+.tk-rd{font-size:12px;color:var(--ink-4);white-space:nowrap;font-variant-numeric:tabular-nums}
+.tk-rules.held .tk-rule{grid-template-columns:32px 1fr auto}
+
+/* 右栏 */
+.taside{display:flex;flex-direction:column;gap:12px}
+.tstart{background:var(--surface);border:1px solid var(--sage-line);border-radius:22px;padding:16px 16px 0;box-shadow:var(--shadow);overflow:hidden}
+.tstart .btn.big{width:100%;justify-content:center;padding:12px 14px;font-size:14.5px;border-radius:14px;background:var(--sage);border-color:var(--sage)}
+.tstart .btn.big:hover{background:var(--sage-deep);border-color:var(--sage-deep)}
+.tstart p{font-size:12.5px;color:var(--ink-3);line-height:1.55;margin:11px 2px 12px}
+.tstart .ph{border:0;border-radius:16px 16px 0 0;aspect-ratio:1.5/1;min-height:0;margin:0 -16px;background:var(--sand)}
+.ttips{background:var(--cream);border:1px solid var(--sand-2);border-radius:20px;padding:15px 16px 13px}
+.tt-h{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+.tt-h b{font-family:var(--f-d);font-size:14.5px;font-weight:600}
+.tt-i{width:30px;height:30px;border-radius:10px;background:var(--surface);display:grid;place-items:center;flex:none;box-shadow:var(--shadow);overflow:hidden}
+.tt-i img{width:24px;height:24px;object-fit:contain}
+.ttips ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.ttips li{display:flex;gap:7px;align-items:flex-start;font-size:12.5px;color:var(--ink-2);line-height:1.5}
+.ttips li svg{width:14px;height:14px;flex:none;color:var(--sage);margin-top:2px}
+.tlinks{display:flex;flex-direction:column;gap:6px}
+.tlinks button{display:flex;align-items:center;gap:10px;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:11px 12px;box-shadow:var(--shadow);text-align:left}
+.tlinks button:hover{border-color:var(--sage-line);background:var(--sage-soft)}
+.tlinks button>span:nth-child(2){flex:1;min-width:0}
+.tlinks .tl-i{width:30px;height:30px;border-radius:10px;background:var(--surface-2);color:var(--ink-2);display:grid;place-items:center;flex:none}
+.tlinks .tl-i svg{width:15px;height:15px}
+.tlinks b{font-family:var(--f-d);font-size:13.5px;font-weight:600;display:block;line-height:1.3}
+.tlinks em{font-style:normal;font-size:11.5px;color:var(--ink-3);display:block;margin-top:1px;line-height:1.45}
+.tlinks button>svg{width:14px;height:14px;color:var(--ink-4);flex:none}
+.taside>.ph{aspect-ratio:4/3;border-radius:22px;background:var(--sand)}
+
+/* 收尾一句 */
+.tend{display:flex;align-items:center;gap:16px;margin-top:26px;padding:6px 0 4px}
+.tend i{flex:1;height:1px;background:var(--sand-2)}
+.tend p{display:inline-flex;align-items:center;gap:8px;font-family:var(--f-d);font-size:14px;font-weight:500;color:var(--sage-deep);text-align:center}
+.tend p svg{width:14px;height:14px;color:var(--rose)}
+
+@media (max-width:1080px){
+  .thero{grid-template-columns:1fr}
+  .thero .ph{order:-1;min-height:160px}
+  .tgrid{grid-template-columns:1fr}
+  .taside>.ph{aspect-ratio:16/9}
+}
+@media (max-width:560px){
+  .th-left{flex-direction:column;align-items:flex-start;gap:12px;padding:20px 20px 22px}
+  .th-text h1{font-size:20px}
+  .tk-topics{grid-template-columns:1fr}
+  .tk-rule{grid-template-columns:32px 1fr auto;grid-template-areas:"i t p" "i a d"}
+  .tk-rule .tk-ri{grid-area:i;align-self:start} .tk-rule .tk-rt{grid-area:t} .tk-rule .pill{grid-area:p;align-self:start}
+  .tk-rule .tk-avs{grid-area:a} .tk-rule .tk-rd{grid-area:d;justify-self:end}
+  .tk-rules.held .tk-rule{grid-template-columns:32px 1fr auto;grid-template-areas:"i t b"}
+  .tk-rules.held .tk-rule .btn{grid-area:b}
+  .tend{flex-direction:column;gap:10px}
+  .tend i{width:40px;flex:none}
+}
+
 /* ============ 「不好开口」流程里的示例按钮 ============ */
 .bq{border:1px solid var(--line);background:var(--surface-2);border-radius:18px;padding:4px 11px;font-size:12.5px;color:var(--ink-2)}
 .bq:hover{border-color:var(--jade-line);background:var(--jade-soft);color:var(--jade-ink)}
