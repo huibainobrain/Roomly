@@ -108,6 +108,7 @@ nav{display:flex;flex-direction:column;gap:2px}
 .idlist button{display:flex;align-items:center;gap:7px;width:100%;background:none;border:1px solid transparent;
   border-radius:8px;padding:5px 7px;font-size:12.5px;color:var(--ink-2);margin:0}
 .idlist button[aria-pressed="true"]{background:var(--jade-soft);border-color:var(--jade-line);color:var(--jade-ink);font-weight:600}
+.idlist button small{margin-left:auto;font-size:11px;color:var(--ink-4);font-weight:400}
 main{flex:1;min-width:0}
 .wrap{max-width:880px;padding:28px 30px 72px;margin:0 auto}
 .topbar,.tabbar{display:none}
@@ -626,7 +627,8 @@ main{flex:1;min-width:0}
 
 /* ============================================================
    共识页
-   新室友 Hero（文字左、场景图右）→ 正在讨论（两张有场景的议题卡）→ 我们已经说好的（轻量行）
+   新室友 Hero（文字左、场景图右，"一致"的原地展开成小对比区）→ 正在讨论（通栏，两张有场景的议题卡，
+   每张卡里直接表态：同意 / 不同意 / 再想想，随时可改）→ 我们已经说好的（轻量行）
    右侧：发起讨论 / 小贴士 / 三个入口 / 氛围图。共识是过程，规则只是结果。
    ============================================================ */
 .pill.sky{background:var(--sky-soft);color:var(--sky);border-color:color-mix(in srgb,var(--sky) 35%,transparent)}
@@ -639,18 +641,35 @@ main{flex:1;min-width:0}
 .th-left .av.xxl{width:64px;height:64px;font-size:21px;flex:none}
 .th-text h1{font-size:23px;font-weight:600;line-height:1.3;color:var(--sage-deep)}
 .th-text p{font-size:13.5px;color:var(--ink-2);margin-top:5px;line-height:1.55;max-width:34ch}
-.th-cmp{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}
-.th-cmp span{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;border-radius:999px;padding:5px 12px 5px 9px;background:var(--surface);box-shadow:var(--shadow)}
-.th-cmp span svg{width:13px;height:13px}
-.th-cmp .ok{color:var(--sage-deep)} .th-cmp .talk{color:var(--peach)}
-.th-text .btnrow{margin-top:13px;align-items:center}
-.th-text .btn.pri{background:var(--sage);border-color:var(--sage)}
-.th-text .btn.pri:hover{background:var(--sage-deep);border-color:var(--sage-deep)}
-.th-hint{font-size:12px;color:var(--ink-3)}
-.th-note{display:inline-flex;align-items:center;gap:6px;margin-top:13px;font-size:12.5px;color:var(--sage-deep);background:var(--surface);border-radius:999px;padding:6px 12px;box-shadow:var(--shadow)}
-.th-note svg{width:13px;height:13px}
+/* 两个状态入口：一致的可以原地展开看对比，正在讨论的点一下滚到下面的议题卡 */
+.th-cmp{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.th-chip{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;border-radius:999px;padding:6px 12px 6px 10px;
+  background:var(--surface);border:1px solid transparent;box-shadow:var(--shadow);color:var(--ink-2);white-space:nowrap}
+.th-chip svg{width:13px;height:13px}
+.th-chip.ok{color:var(--sage-deep)} .th-chip.talk{color:var(--peach)} .th-chip.done{color:var(--sage-deep);background:var(--sage-soft);box-shadow:none}
+.th-chip i{font-style:normal;color:var(--ink-4);margin:0 1px}
+.th-chip span{display:inline-flex;align-items:center;gap:1px;font-weight:500;color:var(--ink-3)}
+.th-chip span svg{transform:rotate(90deg);transition:transform .15s}
+.th-chip[aria-expanded="true"] span svg{transform:rotate(-90deg)}
+button.th-chip:hover{border-color:var(--sage-line)}
+/* 展开的小对比区：只做快速确认，一项一行，很紧凑 */
+.th-same{margin-top:12px;background:color-mix(in srgb,var(--surface) 72%,transparent);border:1px solid var(--sage-line);border-radius:16px;padding:11px 12px 10px}
+.ts-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.ts-h b{font-family:var(--f-d);font-size:13.5px;font-weight:600;color:var(--ink)}
+.ts-close{display:inline-flex;align-items:center;gap:1px;background:none;border:0;padding:2px 0;font-size:12px;color:var(--sage-deep);font-weight:600}
+.ts-close svg{width:13px;height:13px;transform:rotate(-90deg)}
+.ts-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.ts-grid li{display:flex;align-items:center;gap:7px;min-width:0;background:var(--surface);border-radius:10px;padding:6px 9px 6px 7px;font-size:12.5px}
+.ts-i{width:22px;height:22px;border-radius:7px;background:var(--sage-soft);color:var(--sage-deep);display:grid;place-items:center;flex:none}
+.ts-i svg{width:12px;height:12px}
+.ts-k{color:var(--ink-3);flex:none}
+.ts-grid li b{font-family:var(--f-d);font-weight:600;color:var(--ink);flex:1;min-width:0;line-height:1.35}
+.ts-grid li i{color:var(--sage);display:inline-flex;flex:none}
+.ts-grid li i svg{width:13px;height:13px}
+.th-same>.lcgo{margin:7px 0 0;padding:2px 0 0;font-weight:500}
 .thero .ph{border:0;border-radius:0;aspect-ratio:auto;min-height:170px;background:var(--sand-2)}
 .thero .ph img{object-position:55% 50%}
+.tk-discuss{margin-bottom:16px}
 
 .tgrid{display:grid;grid-template-columns:1.7fr .8fr;gap:16px;align-items:start}
 .tmain{display:flex;flex-direction:column;gap:16px;min-width:0}
@@ -684,23 +703,62 @@ main{flex:1;min-width:0}
 .tk-say{display:flex;gap:8px;align-items:flex-start;background:var(--surface);border-radius:14px;padding:10px 12px;font-size:12.5px;color:var(--ink-2);line-height:1.55;border-left:3px solid var(--sage-line)}
 .tk-say i{width:20px;height:20px;border-radius:7px;background:var(--sage-soft);color:var(--sage-deep);display:grid;place-items:center;flex:none;margin-top:1px}
 .tk-say i svg{width:12px;height:12px}
+.tk-say em{display:block;font-style:normal;font-size:11.5px;color:var(--peach);margin-top:3px;font-weight:600}
+.tk-say b{color:var(--ink);font-weight:600}
+/* 每个人现在的态度：接受绿 / 不同意玫瑰 / 再想想暖橙 / 方案改了待重新确认 / Lin 偏好已提供 / 还没说 */
 .tk-stances{display:flex;flex-wrap:wrap;gap:5px}
-.tk-st{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-3);background:var(--surface-2);border-radius:999px;padding:3px 10px 3px 4px}
-.tk-st.on{background:var(--sage-soft);color:var(--sage-deep);font-weight:500}
-.tk-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;padding-top:4px}
-.tk-who{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-3)}
-.tk-who em{font-style:normal}
+.tk-st{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-3);background:var(--surface-2);border-radius:999px;padding:3px 10px 3px 4px;white-space:nowrap}
+.tk-st.agree{background:var(--sage-soft);color:var(--sage-deep);font-weight:500}
+.tk-st.disagree{background:var(--rose-soft);color:var(--rose);font-weight:500}
+.tk-st.undecided{background:var(--peach-soft);color:var(--peach);font-weight:500}
+.tk-st.stale{background:var(--peach-soft);color:var(--peach)}
+.tk-st.provided{background:var(--sky-soft);color:var(--sky)}
+.tk-st.none .av{opacity:.55}
+.tk-notes{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ink-2);line-height:1.5}
+.tk-notes div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tk-notes b{font-weight:600;color:var(--ink-3);margin-right:5px}
+.tk-notes b::after{content:'：'}
+/* 我的那一块：问一句 → 三个态度 → 补充意见 */
+.tk-ask{font-size:13px;font-weight:600;color:var(--ink);margin-top:2px}
+.tk-ask.lin{display:flex;gap:7px;align-items:flex-start;font-weight:400;font-size:12.5px;color:var(--ink-2);line-height:1.5;background:var(--sky-soft);border-radius:12px;padding:9px 11px}
+.tk-ask.lin svg{width:14px;height:14px;flex:none;margin-top:2px;color:var(--sky)}
+.tk-ask.stale{display:flex;gap:7px;align-items:flex-start;font-weight:500;font-size:12.5px;color:var(--peach);line-height:1.5;background:var(--peach-soft);border-radius:12px;padding:9px 11px}
+.tk-ask.stale svg{width:14px;height:14px;flex:none;margin-top:2px}
+.tk-acts{margin-top:-2px;display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.tk-acts .btn{background:var(--surface);border-color:transparent;box-shadow:var(--shadow);padding:8px 10px;border-radius:12px}
+.tk-acts .btn svg{width:13px;height:13px}
+/* 已选的态度实心显示，另外两个还在，点一下就换 */
+.tk-acts .btn.on.agree{background:var(--sage);border-color:var(--sage);color:#fff;box-shadow:none}
+.tk-acts .btn.on.disagree{background:var(--rose-soft);border-color:var(--rose);color:var(--rose);box-shadow:none}
+.tk-acts .btn.on.undecided{background:var(--peach-soft);border-color:var(--peach);color:var(--peach);box-shadow:none}
+.tk-note{background:var(--surface);border:1px solid var(--sand-2);border-radius:14px;padding:11px 12px}
+.tk-note label{font-size:12.5px;margin-bottom:6px}
+.tk-note textarea{min-height:56px;font-size:13.5px;background:var(--ground);border-color:var(--sand-2)}
+.tk-note .btnrow{margin-top:8px}
+.tk-mynote{font-size:12.5px;color:var(--ink-2);line-height:1.5;background:var(--surface);border-radius:12px;padding:8px 11px}
+.tk-mynote b{font-weight:600;color:var(--ink-3);margin-right:6px}
+.tk-mynote b::after{content:'：'}
+.tk-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;padding-top:4px;flex-wrap:wrap}
+.tk-state{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-3);line-height:1.4}
+.tk-state svg{width:13px;height:13px;flex:none}
+.tk-state.agree{color:var(--sage-deep)} .tk-state.disagree{color:var(--rose)} .tk-state.undecided{color:var(--peach)}
+.tk-links{display:inline-flex;gap:14px;margin-left:auto}
+.tk-links .lcgo{margin-left:0}
 .tk-avs{display:inline-flex;flex:none}
 .tk-avs .av{margin-left:-6px;box-shadow:0 0 0 2px var(--cream)}
 .tk-avs .av:first-child{margin-left:0}
-.tk-topic .tk-foot .lcgo{margin-left:0}
-.tk-acts{margin-top:2px}
-.tk-acts .btn.pri{background:var(--sage);border-color:var(--sage)}
-.tk-acts .btn.pri:hover{background:var(--sage-deep);border-color:var(--sage-deep)}
-.tk-acts .btn:not(.pri){background:var(--surface);border-color:transparent;box-shadow:var(--shadow)}
-/* 已选的表态：浅绿底 + 勾，点另一个就能改 */
-.tk-acts .btn.on{background:var(--sage-soft);border-color:var(--sage);color:var(--sage-deep);box-shadow:none}
-.tk-acts .btn.on svg{width:13px;height:13px}
+button.pill.warm{cursor:pointer}
+button.pill.warm:hover{text-decoration:underline}
+.pill.rose{background:var(--rose-soft);color:var(--rose);border-color:color-mix(in srgb,var(--rose) 32%,transparent)}
+
+/* 讨论详情页 */
+.tp-top{margin-bottom:12px;display:flex;flex-direction:column;gap:10px}
+.tp-th{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tp-meta{font-size:12.5px;color:var(--ink-3)}
+.tp-top .tk-acts{max-width:420px}
+.tp-prop{font-size:14.5px;line-height:1.65;color:var(--ink)}
+.tp-quote{color:var(--ink-2)}
+.row .ttl .av.sm{width:22px;height:22px;font-size:9px}
 
 /* 已经说好的：一行一条，很轻 */
 .tk-rules{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
@@ -755,10 +813,16 @@ main{flex:1;min-width:0}
   .taside>.ph{aspect-ratio:16/9}
   .taside>.ph img{object-position:50% 30%}   /* 4:3 素材裁成 16:9 时往上取景，保住墙上的手写字 */
 }
+@media (max-width:760px){
+  .tk-topics{grid-template-columns:1fr}
+}
 @media (max-width:560px){
   .th-left{flex-direction:column;align-items:flex-start;gap:12px;padding:20px 20px 22px}
+  .th-text{width:100%}
   .th-text h1{font-size:20px}
-  .tk-topics{grid-template-columns:1fr}
+  .ts-grid{grid-template-columns:1fr}
+  .tk-acts .btn{padding:8px 6px;font-size:12px}
+  .tp-top .tk-acts{max-width:none}
   .tk-rule{grid-template-columns:32px 1fr auto;grid-template-areas:"i t p" "i a d"}
   .tk-rule .tk-ri{grid-area:i;align-self:start} .tk-rule .tk-rt{grid-area:t} .tk-rule .pill{grid-area:p;align-self:start}
   .tk-rule .tk-avs{grid-area:a} .tk-rule .tk-rd{grid-area:d;justify-self:end}

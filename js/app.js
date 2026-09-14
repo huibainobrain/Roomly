@@ -31,8 +31,10 @@ function render() {
     roster.map(m => av(m.id, 'sm' + (statusOf(m.id) === 'in' ? '' : ' out'))).join('') +
     `<span class="rmore">${living().length} 位成员</span>`;
   document.getElementById('demoPanel').hidden = !S.demoPanel;
-  document.getElementById('idList').innerHTML = living().map(m =>
-    `<button data-act="switchMe" data-k="${m.id}" aria-pressed="${m.id === ME}">${av(m.id, 'sm')}${m.name}</button>`).join('');
+  /* 即将入住的人也能切过去看：方案改过之后需要他确认一次 */
+  const inc = incomingMember();
+  document.getElementById('idList').innerHTML = [...living(), ...(inc ? [inc] : [])].map(m =>
+    `<button data-act="switchMe" data-k="${m.id}" aria-pressed="${m.id === ME}">${av(m.id, 'sm')}${m.name}${m.incoming ? '<small>即将入住</small>' : ''}</button>`).join('');
 
   const markSvg = svg('<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-5h5v5"/>');
   document.getElementById('markA').innerHTML = markSvg;
@@ -76,9 +78,10 @@ document.addEventListener('click', e => {
   case 'seg': S.segment = el.dataset.k; render(); break;
   case 'togglePrefs': S.showAllPrefs = !S.showAllPrefs; render(); break;
   case 'demoPanel': S.demoPanel = !S.demoPanel; render(); break;
-  case 'reset': S = structuredClone(SEED); ME = S.me; render(); toast('演示数据已重置'); break;
+  case 'reset': S = structuredClone(SEED); ME = S.me; ensureLinTopics(); render(); toast('演示数据已重置'); break;
   case 'switchMe': {
     ME = el.dataset.k; S.me = ME; S.demoPanel = false; S.sub = null;
+    UI.noteFor = null; UI.editFor = null;
     render(); toast(`已切换到 ${mem(ME).name} 的视角，可以看到发给他的请求`);
     break;
   }
@@ -310,8 +313,8 @@ document.addEventListener('click', e => {
         src:{ via:'member', by:r.from, at:stamp() } });
     }
     if (r.status === 'discuss') {
-      S.topics.push({ id:'tp' + Date.now(), title:REQ_LABEL[r.kind] + '：' + r.subject, status:'open',
-        done:false, detail:r.detail, votes:{ [ME]:'想讨论一下' } });
+      S.topics.push(newTopic({ title:REQ_LABEL[r.kind] + '：' + r.subject, proposal:r.detail, by:ME, at:stamp(),
+        openText:`${mem(ME).name} 觉得这件事值得大家一起聊聊` }));
       logFeed('sys', `「${r.subject}」已提到家里一起讨论`);
     }
     logFeed(ME, `回应了 ${mem(r.from).name} 的${REQ_LABEL[r.kind]}请求：${REQ_STATUS[r.status]}`);
@@ -508,56 +511,91 @@ document.addEventListener('click', e => {
     break;
   }
 
-  /* ---- 共识 ---- */
-  case 'agreeTopic': {
-    const t = S.topics.find(x => x.id === id);
-    t.votes = t.votes || {}; t.votes[ME] = '同意';
-    /* 全员都同意才成为约定；有人想再聊聊，议题就继续开着，表态随时可以改 */
-    const all = living().every(m => t.votes[m.id] === '同意');
-    const spoken = living().every(m => t.votes[m.id]);
-    if (all) finishTopic(t);
-    render(); toast(all ? '大家都同意了，已成为共同约定' : spoken ? '已记录。还有人想再聊聊，先不改约定' : '已记录你的意见，随时可以改');
+  /* ---- 共识 ----
+     表态只更新"我对当前这版方案的态度"，议题不会因为谁点了一下就消失；
+     需要的人都接受了，才写进约定。 */
+  case 'toggleSame': UI.sameOpen = !UI.sameOpen; render(); break;
+  case 'jumpTo': { const s = document.getElementById(el.dataset.k); if (s) s.scrollIntoView({ behavior:'smooth', block:'start' }); break; }
+  case 'openTopic': S.tab = 'talk'; S.sub = 'topic'; S.topicId = id; UI.editFor = null; render(); window.scrollTo({ top:0 }); break;
+  case 'stance': {
+    const t = topicById(id), s = el.dataset.s;
+    const resolved = setStance(t, ME, s);
+    /* 不同意的话，顺手问问更希望怎么安排；其他态度想补充也随时能点"补充想法" */
+    UI.noteFor = s === 'disagree' ? t.id : (UI.noteFor === t.id ? null : UI.noteFor);
+    render();
+    if (resolved) { toast(`大家都接受了「${t.title}」的方案，已经写进共同约定`); break; }
+    toast(s === 'agree' ? '已记录你的想法，随时可以修改'
+        : s === 'disagree' ? '已记录。说说你更希望怎么安排？'
+        : '没关系，想好以后随时回来改。');
+    if (s === 'disagree') { const ta = document.getElementById('note-' + t.id); if (ta) ta.focus(); }
     break;
   }
-  case 'discussTopic': {
-    const t = S.topics.find(x => x.id === id);
-    t.votes = t.votes || {}; t.votes[ME] = '想讨论一下';
-    render(); toast('已记录。想讨论不是反对，只是需要再聊聊，改主意了随时可以点同意。');
+  case 'noteOpen': UI.noteFor = id; render(); { const ta = document.getElementById('note-' + id); if (ta) ta.focus(); } break;
+  case 'noteCancel': UI.noteFor = null; render(); break;
+  case 'noteSave': {
+    const t = topicById(id), ta = document.getElementById('note-' + id);
+    const text = ta ? ta.value.trim() : '';
+    const p = t.positions[ME] || (t.positions[ME] = { stance:'provided', version:t.version, at:stamp() });
+    p.note = text; p.at = stamp();
+    t.history.push({ type:'note', who:ME, at:stamp(), text, version:t.version });
+    UI.noteFor = null;
+    render(); toast(text ? '已记下你的补充意见，大家都能看到' : '已清空补充意见');
+    break;
+  }
+  /* 方案改了就是新的一版：之前的表态不能自动算成对新方案的同意 */
+  case 'proposalEdit': UI.editFor = id; render(); { const ta = document.getElementById('prop-' + id); if (ta) ta.focus(); } break;
+  case 'proposalCancel': UI.editFor = null; render(); break;
+  case 'proposalSave': {
+    const t = topicById(id), ta = document.getElementById('prop-' + id);
+    const text = ta ? ta.value.trim() : '';
+    if (!text) { toast('方案不能是空的'); return; }
+    UI.editFor = null;
+    if (text === t.proposal) { render(); toast('方案没有变化'); break; }
+    t.history.push({ type:'proposal', who:ME, at:stamp(), from:t.proposal, text, version:t.version + 1 });
+    t.proposal = text; t.version++;
+    logFeed('sys', `「${t.title}」的方案调整到第 ${t.version} 版，等待大家重新确认`);
+    render(); toast(`方案已更新到第 ${t.version} 版。之前的表态需要重新确认，也包括你自己的。`);
     break;
   }
   /* 没达成一致也是一种结果：原约定保持不变 */
   case 'holdTopic': {
-    const t = S.topics.find(x => x.id === id);
-    t.status = 'hold'; t.done = true; t.heldAt = stamp();
+    const t = topicById(id);
+    t.status = 'hold'; t.heldAt = stamp();
+    t.history.push({ type:'hold', who:ME, at:stamp() });
     logFeed('sys', `「${t.title}」暂不调整，保持原有约定`);
-    render(); toast('已标记为暂不调整。原来的约定保持不变，之后想起来还能再提。');
+    goTo('talk'); toast('已标记为暂不调整。原来的约定保持不变，之后想起来还能再提。');
     break;
   }
   case 'reopenTopic': {
-    const t = S.topics.find(x => x.id === id);
-    t.status = 'open'; t.done = false; t.votes = { [ME]:'想讨论一下' };
-    render(); toast('已重新打开讨论');
+    const t = topicById(id);
+    t.status = 'discussion'; t.positions = {};
+    t.history.push({ type:'reopen', who:ME, at:stamp() });
+    logFeed('sys', `「${t.title}」重新打开了讨论`);
+    render(); toast('已重新打开讨论，大家可以重新表态');
     break;
   }
-  case 'discussLin': {
-    const d = linDiff();
-    d.diff.forEach(x => S.topics.push({ id:'tp' + Date.now() + x.k, title:`${x.label}（${d.lin.name} 入住后）`,
-      done:false, detail:`现在家里是 ${x.house}，${d.lin.name} 的偏好是 ${x.lin}。${SUGGESTION[x.k] || ''}`,
-      votes:{}, prefKey:x.k }));
-    S.linDiscussed = true;
-    logFeed('sys', `${d.lin.name} 入住前的 ${d.diff.length} 项差异已进入讨论`);
-    goTo('talk'); toast(`已发起 ${d.diff.length} 个议题，其余 ${d.same.length} 项保持不变`);
-    break;
-  }
+  /* 入住共识结果页里的"接受这个建议"：这件事已经在讨论就直接记一票同意，没有就开一个议题 */
   case 'acceptSuggest': {
-    const k = el.dataset.k;
-    S.topics.push({ id:'tp' + Date.now(), title:PREF_KEYS.find(p => p.k === k).label, done:false,
-      detail:SUGGESTION[k], votes:{ [ME]:'同意' }, prefKey:k });
-    logFeed('sys', `「${PREF_KEYS.find(p => p.k === k).label}」的建议已提交全员确认`);
-    goTo('talk'); toast('已提交全员确认，三人同意后成为共同约定');
+    const k = el.dataset.k, label = PREF_KEYS.find(p => p.k === k).label;
+    let t = openTopics().find(x => x.prefKey === k);
+    if (!t) {
+      t = newTopic({ title:label, prefKey:k, proposal:SUGGESTION[k], by:ME, at:stamp(),
+        ruleId:(S.rules.find(r => r.prefKey === k) || {}).id,
+        openText:`${mem(ME).name} 在入住共识结果里接受了管家建议，提交大家一起确认` });
+      S.topics.push(t);
+      logFeed('sys', `「${label}」的建议已提交全员确认`);
+    }
+    const resolved = setStance(t, ME, 'agree');
+    goTo('talk'); toast(resolved ? `大家都接受了「${label}」的方案，已经写进共同约定` : '已记录你接受这个方案，其他人都接受后才会成为约定');
     break;
   }
-  case 'editSuggest': toast('可以在「正在讨论」里继续修改措辞，达成一致后再形成约定'); break;
+  case 'editSuggest': {
+    const t = openTopics().find(x => x.prefKey === el.dataset.k);
+    if (!t) { toast('可以先接受建议开一个议题，再在讨论详情里调整方案'); break; }
+    S.tab = 'talk'; S.sub = 'topic'; S.topicId = t.id; UI.editFor = t.id;
+    render(); window.scrollTo({ top:0 });
+    break;
+  }
 
   /* ---- 入住共识问卷 ---- */
   case 'startQuiz': S.quiz = { step:0, answers:{} }; quizSheet(); break;
@@ -613,16 +651,16 @@ document.addEventListener('click', e => {
       closeSheet(); goTo('talk', 'issue');
       toast('提醒已私下发出，不指向任何人。这件事已有约定，没有新增约定。');
     } else if (a.way === 'clarify') {
-      S.topics.push({ id:'tp' + Date.now(), title:'重新确认：' + existing.title, done:false,
-        detail:`${existing.desc}${gap ? ' 当前情况：' + gap.text : ''}`,
-        votes:{ [ME]:'同意' }, revisit:existing.id });
+      S.topics.push(newTopic({ title:'重新确认：' + existing.title, revisit:existing.id, at:stamp(),
+        proposal:`${existing.desc}${gap ? ' 当前情况：' + gap.text : ''}`,
+        openText:'有人觉得这条约定需要重新明确一次（不显示是谁提出的）' }));
       logFeed('sys', `「${existing.title}」进入重新确认`);
       closeSheet(); goTo('talk');
       toast('已发起重新确认，不会新增约定，只修改现有这一条');
     } else {
-      S.topics.push({ id:'tp' + Date.now(), title:a.focus, done:false,
-        detail: AWK_SUGGEST[a.focus] || `关于${a.focus}的约定，等待大家一起确认。`,
-        votes:{ [ME]:'同意' } });
+      S.topics.push(newTopic({ title:a.focus, at:stamp(),
+        proposal: AWK_SUGGEST[a.focus] || `关于${a.focus}的约定，等待大家一起确认。`,
+        openText:'有人把这件事提到家里一起聊（不显示是谁提出的）' }));
       logFeed('sys', `新增讨论议题「${a.focus}」`);
       closeSheet(); goTo('talk');
       toast('已发起讨论，不会显示是谁提出的');
@@ -638,8 +676,8 @@ document.addEventListener('click', e => {
     if (k === 'remind') { it.level = Math.max(it.level, 2); logFeed('sys', `按共同约定就「${it.title}」发出了一次私下提醒`); }
     if (k === 'discuss') {
       it.level = 4;
-      S.topics.push({ id:'tp' + Date.now(), title:'重新确认：' + (rule ? rule.title : it.title), done:false,
-        detail: rule ? rule.desc : it.note, votes:{ [ME]:'同意' }, revisit: rule && rule.id });
+      S.topics.push(newTopic({ title:'重新确认：' + (rule ? rule.title : it.title), revisit: rule && rule.id, at:stamp(),
+        proposal: rule ? rule.desc : it.note, openText:`由居住问题记录「${it.title}」发起，不显示是谁提的` }));
       logFeed('sys', `「${it.title}」已提到家里一起讨论`);
     }
     if (k === 'steward') { it.level = 5; render(); stewardSheet(); return; }
@@ -656,8 +694,8 @@ document.addEventListener('click', e => {
     if (picked.length) rule.desc = picked.join('、') + '。';
     it.level = 1; it.count = 0; it.follow = 'discuss';
     it.note = '标准已重新明确，正在等待全员确认。';
-    S.topics.push({ id:'tp' + Date.now(), title:'重新确认：' + rule.title, done:false,
-      detail:rule.desc, votes:{ [ME]:'同意' }, revisit:rule.id });
+    S.topics.push(newTopic({ title:'重新确认：' + rule.title, revisit:rule.id, at:stamp(),
+      proposal:rule.desc, openText:'标准被重新明确了一次，等待大家确认' }));
     logFeed('sys', `「${rule.title}」的标准被重新明确，等待全员确认`);
     closeSheet(); goTo('talk'); toast('已发起重新确认，问题记录回到第 1 级');
     break;
@@ -774,24 +812,35 @@ function newRequest(kind, to, subject, detail, extra) {
   return r;
 }
 
+/* 记下某个人对当前这版方案的态度：覆盖他之前的，补充意见跟着人走。
+   需要的人都接受了才达成；返回是否就此达成。 */
+function setStance(t, who, stance) {
+  const prev = t.positions[who];
+  t.positions[who] = { stance, note: prev ? prev.note || '' : '', version:t.version, at:stamp() };
+  t.history.push({ type:'stance', who, stance, version:t.version, at:stamp() });
+  if (!topicResolvable(t)) return false;
+  resolveTopic(t);
+  return true;
+}
+
 /* 达成一致：同一个议题只更新原约定，不会因为入口不同长出内容相近的第二条 */
-function finishTopic(t) {
-  t.done = true; t.status = 'agreed';
-  const target = t.revisit
-    ? S.rules.find(x => x.id === t.revisit)
-    : (t.prefKey && S.rules.find(x => x.prefKey === t.prefKey));
+function resolveTopic(t) {
+  t.status = 'resolved'; t.resolvedAt = stamp();
+  t.history.push({ type:'resolved', who:'sys', at:stamp(), version:t.version });
+  const target = S.rules.find(x => x.id === (t.ruleId || t.revisit))
+    || (t.prefKey && S.rules.find(x => x.prefKey === t.prefKey));
   if (target) {
     target.history = target.history || [];
     target.history.push({ desc:target.desc, until:TODAY });
-    target.desc = t.detail;
+    target.desc = t.proposal;
     target.since = TODAY;
     target.by = living().map(m => m.id);
-    logFeed('sys', `「${target.title}」已更新到第 ${target.history.length + 1} 版`);
+    logFeed('sys', `大家就「${t.title}」达成了新的约定：「${target.title}」更新到第 ${target.history.length + 1} 版`);
     return;
   }
-  S.rules.push({ id:'r' + Date.now(), title:t.title.replace(/（.*?）/, ''), cat:'共识',
-    desc:t.detail, by:living().map(m => m.id), since:TODAY, prefKey:t.prefKey, history:[] });
-  logFeed('sys', `「${t.title}」已获全员确认，成为共同约定`);
+  S.rules.push({ id:'r' + Date.now(), title:t.title.replace(/（.*?）/, ''), cat:TOPIC_CAT[t.prefKey] || '共识',
+    desc:t.proposal, by:living().map(m => m.id), since:TODAY, prefKey:t.prefKey, history:[] });
+  logFeed('sys', `大家就「${t.title}」达成了新的约定`);
 }
 
 function defaultMoveout() {

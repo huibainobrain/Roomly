@@ -819,12 +819,15 @@ function vBill() {
 /* ============================================================
    共识
    ============================================================ */
-/* 共识页：共识是过程（讨论 → 表达差异 → 理解 → 找到方案），规则只是结果。
-   "正在讨论"有人、有场景、有动作；"我们已经说好的"安静、轻、稳定。
-   所有议题、偏好、确认状态都来自 linDiff / topics / rules，页面不写死。 */
+/* 共识页：共识是过程（表达差异 → 理解 → 找到大家都接受的方案），规则只是结果。
+   新室友一来，系统就把偏好比对完：一致的收起、按需看；不同的直接进入"正在讨论"。
+   每个人对当前方案表态（同意 / 不同意 / 再想想），随时可以改；议题不会因为谁点了一下就消失，
+   需要的人都接受了，才写进"我们已经说好的"。所有议题、偏好、态度都来自 linDiff / topics / rules，页面不写死。 */
 const TOPIC_ART = { overnight:'img/talk-overnight.jpg', temp:'img/talk-temp.jpg' };
 const TOPIC_ART_LABEL = { overnight:'待补访客留宿场景图<br>卧室 · 暖光 · 绿植', temp:'待补空调温度场景图<br>空调 · 窗边 · 阳光' };
+const PREF_ICON = { quiet:I.clock, visitor:I.guest, overnight:I.guest, kitchen:I.chore, supply:I.box, temp:I.home, smoke:I.shield, social:I.life };
 const RULE_ICON = { '噪音':I.clock, '访客':I.guest, '物品':I.box, '清洁':I.chore, '其他':I.shield, '共识':I.talk };
+const STANCE_PILL = { agree:'ok', disagree:'rose', undecided:'peach', stale:'warm', provided:'sky', none:'plain' };
 const TALK_TIPS = [
   '从"我"出发，表达感受和需求，而不是指责',
   '倾听不同的想法，也许会有更合适的方案',
@@ -832,106 +835,117 @@ const TALK_TIPS = [
   '共识不是一次达成的，可以随时再讨论',
   '尊重彼此的生活习惯，是温暖的开始'
 ];
+const I_X = '<path d="M6 6l12 12M18 6 6 18"/>';
+
+/* 议题里"和我有关"的那一块：怎么看这个方案 → 三个态度 → 补充意见。卡片和详情页共用。
+   Lin 在第 1 版不表态（方案本来就是按他的偏好拟的），方案改过之后才请他确认。 */
+function stanceBlock(t) {
+  const inc = incomingMember(), isInc = inc && ME === inc.id;
+  const me = stanceOf(t, ME);
+  const canAct = living().some(m => m.id === ME) || (isInc && t.origin === 'lin' && t.version > 1);
+  const note = t.positions[ME] ? t.positions[ME].note || '' : '';
+  const noteOpen = UI.noteFor === t.id;
+  const btn = (s, label, icon) => `<button class="btn sm ${me.k === s ? 'on ' + s : ''}" data-act="stance" data-s="${s}" data-id="${t.id}" aria-pressed="${me.k === s}">${svg(icon)}${label}</button>`;
+  const ask = !canAct
+    ? (isInc && t.origin === 'lin'
+        ? `<div class="tk-ask lin">${svg(I.info)}<span>这个方案是按你填的偏好和家里现有的约定拟的，不用再对自己的偏好表态；方案有调整时会请你确认。</span></div>`
+        : `<div class="tk-ask lin">${svg(I.info)}<span>你入住后就能参与这件事的讨论。</span></div>`)
+    : `${me.k === 'none' || me.k === 'provided' ? `<div class="tk-ask">${isInc ? '方案有了调整，你能接受吗？' : '你怎么看这个方案？'}</div>`
+        : me.k === 'stale' ? `<div class="tk-ask stale">${svg(I.info)}<span>方案已调整到第 ${t.version} 版，请重新确认（上一版你选了「${{ agree:'同意', disagree:'不同意', undecided:'再想想' }[me.prev]}」）</span></div>` : ''}
+      <div class="tk-acts">
+        ${btn('agree', isInc ? '可以接受' : '同意', I.check)}${btn('disagree', '不同意', I_X)}${btn('undecided', '再想想', I.clock)}
+      </div>`;
+  const state = me.k === 'agree' ? `<span class="tk-state agree">${svg(I.check)}你的想法已记录，可随时修改。</span>`
+    : me.k === 'disagree' ? `<span class="tk-state disagree">${svg(I_X)}已记录你不同意这个方案${note ? '' : '，可以说说你更希望怎么安排'}。</span>`
+    : me.k === 'undecided' ? `<span class="tk-state undecided">${svg(I.clock)}没关系，想好以后随时回来改。</span>`
+    : `<span class="tk-state">${topicSummary(t)}</span>`;
+  const noteBox = noteOpen ? `
+    <div class="tk-note">
+      <label for="note-${t.id}">${me.k === 'disagree' ? '说说你更希望怎么安排？' : '想补充点什么？'}</label>
+      <textarea id="note-${t.id}" rows="2" placeholder="比如：我觉得留宿还是最好限制次数，但特殊情况可以提前说。">${note}</textarea>
+      <div class="btnrow"><button class="btn pri sm" data-act="noteSave" data-id="${t.id}">保存</button>
+        <button class="btn sm" data-act="noteCancel" data-id="${t.id}">先不写</button></div>
+    </div>` : '';
+  const noteLink = (me.k !== 'none' && me.k !== 'stale') || (isInc && t.origin === 'lin')
+    ? `<button class="lcgo" data-act="noteOpen" data-id="${t.id}">${note ? '修改意见' : '补充想法'}</button>` : '';
+  return { ask, noteBox, state, noteLink, note: note && !noteOpen ? `<div class="tk-mynote"><b>你的补充</b>${note}</div>` : '' };
+}
 
 function vTalk() {
   if (S.sub) return TALK_VIEWS[S.sub]();
   const inc = incomingMember(), d = linDiff(), open = openTopics(), held = holdTopics();
-  const revisit = rulesToRevisit();
-  const prefLabel = k => (PREF_KEYS.find(p => p.k === k) || {}).label || '';
+  const linOpen = open.filter(t => t.origin === 'lin'), linDone = S.topics.filter(t => t.origin === 'lin' && t.status === 'resolved');
 
-  /* ---- 议题卡：入住差异（还没发起）和讨论中的议题共用一种卡 ---- */
   const artOf = k => TOPIC_ART[k]
     ? `<figure class="ph tk-art"><img src="${TOPIC_ART[k]}" alt="" onload="this.parentNode.classList.add('ok')" onerror="this.remove()"><figcaption>${TOPIC_ART_LABEL[k]}</figcaption></figure>`
     : '';
-  const stack = (ids, dimIds = []) => `<span class="tk-avs">${ids.map(id => av(id, 'sm' + (dimIds.includes(id) ? ' out' : ''))).join('')}</span>`;
+  const stack = ids => `<span class="tk-avs">${ids.map(id => av(id, 'sm')).join('')}</span>`;
 
-  /* 还没进入讨论的差异：来自 Lin 填的偏好和现在家里做法的比对 */
-  const diffCard = x => `
-    <article class="tk-topic pre">
-      ${artOf(x.k)}
-      <div class="tk-body">
-        <div class="tk-th"><span class="tk-ic">${svg(x.k === 'temp' ? I.home : I.guest)}</span><h3>${x.label}</h3><span class="pill sky">待讨论</span></div>
-        <div class="tk-vals">
-          <span>现在家里 <b>${x.house}</b></span>
-          <span>${av(inc.id, 'sm')}${inc.name} <b>${x.lin}</b></span>
-        </div>
-        <p class="tk-sub">${x.rule ? `涉及现有约定「${x.rule.title}」，${inc.name} 入住后需要一起再确认一次。` : '目前还没有相关约定，可以趁这次一起定下来。'}</p>
-        ${SUGGESTION[x.k] ? `<div class="tk-say"><i>${svg(I.spark)}</i><span>管家建议：${SUGGESTION[x.k]}</span></div>` : ''}
-        <div class="tk-foot">
-          <span class="tk-who">${stack([inc.id, ...living().map(m => m.id)])}<em>${inc.name} 和 ${living().length} 位室友一起聊</em></span>
-          <button class="lcgo" data-act="go" data-tab="talk" data-sub="lin">看完整对比${svg(I.chev)}</button>
-        </div>
-      </div>
-    </article>`;
-
-  /* 讨论中的议题：谁表态了、谁还没说，表态不是投票 */
+  /* ---- 讨论中的议题：场景 → 现在家里 vs Lin 的偏好 → 当前方案 → 每个人的态度 → 我的表态 ---- */
   const topicCard = t => {
-    const votes = t.votes || {}, mine = votes[ME];
-    const voted = living().filter(m => votes[m.id]).map(m => m.id);
-    const waiting = living().filter(m => !votes[m.id]).map(m => m.name);
-    const talking = living().filter(m => votes[m.id] === '想讨论一下').map(m => m.name);
     const item = t.prefKey ? d.diff.find(x => x.k === t.prefKey) : null;
-    const title = t.prefKey ? prefLabel(t.prefKey) : t.title;
+    const people = [...living().map(m => m.id), ...(inc && t.origin === 'lin' ? [inc.id] : [])];
+    const reviser = t.version > 1 ? [...t.history].reverse().find(h => h.type === 'proposal') : null;
+    const notes = people.map(id => ({ id, s: stanceOf(t, id) })).filter(x => x.s.note && x.id !== ME).slice(-2);
+    const b = stanceBlock(t);
     return `
     <article class="tk-topic">
       ${artOf(t.prefKey)}
       <div class="tk-body">
-        <div class="tk-th"><span class="tk-ic">${svg(t.prefKey === 'temp' ? I.home : t.prefKey === 'overnight' ? I.guest : I.talk)}</span><h3>${title}</h3>
-          <span class="pill ${mine ? 'peach' : 'sky'}">${mine ? '讨论中' : '待表态'}</span></div>
+        <div class="tk-th"><span class="tk-ic">${svg(PREF_ICON[t.prefKey] || I.talk)}</span><h3>${t.title}</h3>
+          <span class="pill peach">${svg(I.clock)}讨论中</span></div>
         ${item ? `<div class="tk-vals">
           <span>现在家里 <b>${item.house}</b></span>
-          <span>${av(inc.id, 'sm')}${inc.name} <b>${item.lin}</b></span></div>` : `<p class="tk-sub">${t.detail}</p>`}
-        ${t.prefKey && SUGGESTION[t.prefKey] ? `<div class="tk-say"><i>${svg(I.spark)}</i><span>管家建议：${SUGGESTION[t.prefKey]}</span></div>` : ''}
-        <div class="tk-stances">${living().map(m => votes[m.id]
-          ? `<span class="tk-st on">${av(m.id, 'sm')}${m.name}${m.id === ME ? '（你）' : ''} · ${votes[m.id]}</span>`
-          : `<span class="tk-st">${av(m.id, 'sm out')}${m.name} 还没说</span>`).join('')}</div>
+          <span>${av(inc.id, 'sm')}${inc.name} 的偏好 <b>${item.lin}</b></span></div>` : ''}
+        <div class="tk-say"><i>${svg(I.spark)}</i><span><b>${t.origin === 'lin' && t.version === 1 ? '管家建议' : '当前方案'}：</b>${t.proposal}
+          ${reviser ? `<em>第 ${t.version} 版 · ${mem(reviser.who).name} 调整</em>` : ''}</span></div>
+        <div class="tk-stances">${people.map(id => { const s = stanceOf(t, id);
+          return `<span class="tk-st ${s.k}" title="${s.note ? s.note.replace(/"/g, '&quot;') : ''}">${av(id, 'sm')}${mem(id).name}${id === ME ? '（你）' : ''} · ${s.text}</span>`; }).join('')}</div>
+        ${notes.length ? `<div class="tk-notes">${notes.map(x => `<div><b>${mem(x.id).name}</b>${x.s.note}</div>`).join('')}</div>` : ''}
+        ${b.ask}
+        ${b.noteBox}
+        ${b.note}
         <div class="tk-foot">
-          <span class="tk-who">${stack(living().map(m => m.id), living().filter(m => !votes[m.id]).map(m => m.id))}<em>${
-            waiting.length ? `等 ${waiting.join('、')} 表态`
-            : talking.length ? `${talking.join('、')} 想再聊聊，可以先调整建议，或者暂不调整` : '大家都同意了'}</em></span>
-        </div>
-        <div class="btnrow tk-acts">
-          <button class="btn sm ${mine === '同意' ? 'on' : 'pri'}" data-act="agreeTopic" data-id="${t.id}" aria-pressed="${mine === '同意'}">${mine === '同意' ? svg(I.check) + '已同意' : '同意'}</button>
-          <button class="btn sm ${mine === '想讨论一下' ? 'on' : ''}" data-act="discussTopic" data-id="${t.id}" aria-pressed="${mine === '想讨论一下'}">${mine === '想讨论一下' ? svg(I.check) + '想再聊聊' : '想讨论一下'}</button>
-          <button class="btn sm" data-act="holdTopic" data-id="${t.id}">暂不调整</button>
+          ${b.state}
+          <span class="tk-links">${b.noteLink}<button class="lcgo" data-act="openTopic" data-id="${t.id}">讨论详情${svg(I.chev)}</button></span>
         </div>
       </div>
     </article>`;
   };
 
-  const cards = [
-    ...(inc && !S.linDiscussed ? d.diff.map(diffCard) : []),
-    ...open.map(topicCard)
-  ];
-
-  /* ---- 已经说好的：轻量行 ---- */
+  /* ---- 已经说好的：轻量行；正被哪个议题讨论着的约定，标出来 ---- */
   const ruleRow = r => {
-    const partial = r.by.length < living().length, redo = revisit.some(v => v.rule.id === r.id);
+    const partial = r.by.length < living().length, talking = topicOnRule(r);
     return `<li class="tk-rule">
       <span class="tk-ri">${svg(RULE_ICON[r.cat] || I.check)}</span>
       <div class="tk-rt"><b>${r.title}</b><span>${r.desc}</span>
         ${r.history && r.history.length ? `<em>第 ${r.history.length + 1} 版 · 上一版：${r.history[r.history.length - 1].desc}</em>` : ''}</div>
       ${stack(r.by)}
       <span class="tk-rd">${r.since}</span>
-      <span class="pill ${redo ? 'warm' : partial ? 'warn' : 'ok'}">${redo ? '待重新确认' : partial ? `${r.by.length}/${living().length} 已确认` : '已确认'}</span>
+      ${talking ? `<button class="pill warm" data-act="openTopic" data-id="${talking.id}">讨论中</button>`
+        : `<span class="pill ${partial ? 'warn' : 'ok'}">${partial ? `${r.by.length}/${living().length} 已确认` : '已确认'}</span>`}
     </li>`;
   };
 
+  /* ---- Hero：新室友入住 + 两个状态入口；"一致"的那块原地展开成小对比区 ---- */
   const hero = inc ? `
-  <section class="thero">
+  <section class="thero ${UI.sameOpen ? 'open' : ''}">
     <div class="th-left">
       ${av(inc.id, 'xxl')}
       <div class="th-text">
         <h1>${inc.name} 将在 ${inc.joined} 入住 ${inc.room}</h1>
         <p>一个新的人要进来一起生活，只需要提前聊清楚真正会互相影响的事。</p>
         <div class="th-cmp">
-          <span class="ok">${svg(I.check)}${d.same.length} 项和家里一致</span>
-          <span class="talk">${svg(I.talk)}${d.diff.length} 项值得聊聊</span>
+          <button class="th-chip ok" data-act="toggleSame" aria-expanded="${UI.sameOpen}">${svg(I.check)}${d.same.length} 项和家里一致<i>·</i><span>${UI.sameOpen ? '收起' : '看对比'}${svg(I.chev)}</span></button>
+          ${linOpen.length ? `<button class="th-chip talk" data-act="jumpTo" data-k="tk-discuss">${svg(I.talk)}${linOpen.length} 项正在讨论</button>` : ''}
+          ${linDone.length ? `<span class="th-chip done">${svg(I.check)}${linDone.length} 项已经说好</span>` : ''}
         </div>
-        ${S.linDiscussed
-          ? `<div class="th-note">${svg(I.check)}这 ${d.diff.length} 项已经在下面讨论，其余 ${d.same.length} 项保持不变。</div>`
-          : `<div class="btnrow"><button class="btn pri" data-act="go" data-tab="talk" data-sub="lin">只聊这 ${d.diff.length} 件事</button>
-             <span class="th-hint">其余 ${d.same.length} 项不需要重新确认</span></div>`}
+        ${UI.sameOpen ? `
+        <div class="th-same">
+          <div class="ts-h"><b>这些方面我们已经达成一致 🎉</b><button class="ts-close" data-act="toggleSame">收起${svg(I.chev)}</button></div>
+          <ul class="ts-grid">${d.same.map(s => `<li><span class="ts-i">${svg(PREF_ICON[s.k] || I.check)}</span><span class="ts-k">${s.label}</span><b>${s.house}</b><i>${svg(I.check)}</i></li>`).join('')}</ul>
+          <button class="lcgo" data-act="go" data-tab="talk" data-sub="lin">查看完整偏好对比${svg(I.chev)}</button>
+        </div>` : ''}
       </div>
     </div>
     ${imgSlot('img/talk-hero.jpg', '待补入住场景图<br>入户门 · Welcome 地垫 · 纸箱 · 绿植 · 猫')}
@@ -939,16 +953,16 @@ function vTalk() {
 
   return `
   ${hero}
+  <section class="tsec tk-discuss" id="tk-discuss">
+    <div class="tk-h"><span class="tk-hi peach">${svg(I.talk)}</span>
+      <div><h2>正在讨论</h2><p>只讨论真正会影响大家生活的事。把精力放在重要的事上，找到大家都舒服的方式。</p></div>
+      <span class="tk-hc">${open.length ? `${open.length} 件` : ''}</span></div>
+    ${open.length ? `<div class="tk-topics">${open.map(topicCard).join('')}</div>`
+      : '<div class="tk-empty">现在没有需要讨论的事。有人提出新问题时会出现在这里。</div>'}
+  </section>
+
   <div class="tgrid">
     <div class="tmain">
-      <section class="tsec">
-        <div class="tk-h"><span class="tk-hi peach">${svg(I.talk)}</span>
-          <div><h2>正在讨论</h2><p>只讨论真正会影响大家生活的事。把精力放在重要的事上，找到大家都舒服的方式。</p></div>
-          <span class="tk-hc">${cards.length ? `${cards.length} 件` : ''}</span></div>
-        ${cards.length ? `<div class="tk-topics">${cards.join('')}</div>`
-          : '<div class="tk-empty">现在没有需要讨论的事。有人提出新问题时会出现在这里。</div>'}
-      </section>
-
       <section class="tsec">
         <div class="tk-h"><span class="tk-hi sage">${svg(I.check)}</span>
           <div><h2>我们已经说好的</h2><p>这些是大家一起达成的，系统会帮忙记着，不用再反复开口。</p></div>
@@ -986,6 +1000,72 @@ function vTalk() {
   </div>
 
   <div class="tend"><i></i><p>${svg(I.life)}因为人与人的理解，平凡的日子也闪闪发光。</p><i></i></div>`;
+}
+
+/* 讨论详情：完整偏好、当前方案（可以调整）、每个人的意见、来龙去脉 */
+function vTopic() {
+  const t = topicById(S.topicId);
+  if (!t) return `${backBtn('共识', 'talk')}<div class="card empty">这个议题不存在了</div>`;
+  const inc = incomingMember();
+  const people = [...living().map(m => m.id), ...(inc && t.origin === 'lin' ? [inc.id] : [])];
+  const rule = S.rules.find(r => r.id === (t.ruleId || t.revisit)) || (t.prefKey && S.rules.find(r => r.prefKey === t.prefKey));
+  const editing = UI.editFor === t.id, talking = t.status === 'discussion';
+  const b = stanceBlock(t);
+  const who = id => id === 'sys' ? '系统' : mem(id).name;
+  const VERB = { agree:'接受了', disagree:'不同意', undecided:'还想再想想' };
+  const hist = h => h.type === 'open' ? (h.text || '开始讨论')
+    : h.type === 'stance' ? `${who(h.who)} ${VERB[h.stance]}第 ${h.version} 版方案`
+    : h.type === 'note' ? (h.text ? `${who(h.who)} 补充：${h.text}` : `${who(h.who)} 清空了补充意见`)
+    : h.type === 'proposal' ? `${who(h.who)} 把方案调整为第 ${h.version} 版：${h.text}`
+    : h.type === 'resolved' ? `需要的人都接受了第 ${h.version} 版方案，已写进共同约定`
+    : h.type === 'hold' ? `${who(h.who)} 标记为暂不调整，原有约定保持不变`
+    : h.type === 'reopen' ? `${who(h.who)} 重新打开了讨论` : '';
+
+  return `
+    ${backBtn('共识', 'talk')}
+    ${head(`${t.title} · 讨论详情`, talking ? '完整偏好、每个人的意见和方案的每一次调整都在这里。表态随时可以改。'
+      : t.status === 'resolved' ? '这件事已经达成一致，写进了「我们已经说好的」。' : '这件事暂不调整，原有约定保持不变，想起来还能再提。')}
+
+    <div class="card pad tp-top">
+      <div class="tp-th">
+        <span class="pill ${talking ? 'peach' : t.status === 'resolved' ? 'ok' : 'plain'}">${talking ? '讨论中' : t.status === 'resolved' ? '已达成' : '暂不调整'}</span>
+        <span class="tp-meta">第 ${t.version} 版方案${t.openedAt ? ` · ${t.openedAt} 开始讨论` : ''}${t.resolvedAt ? ` · ${t.resolvedAt} 达成` : ''}</span>
+      </div>
+      ${talking ? `${b.ask}${b.noteBox}${b.note}<div class="tk-foot">${b.state}<span class="tk-links">${b.noteLink}</span></div>` : ''}
+    </div>
+
+    ${t.prefKey ? `${sec('完整偏好', '每个人在入住共识里填的')}
+    <div class="card pad">
+      <div class="vals">${people.map(id => `<span class="val">${av(id, 'sm')}${mem(id).name} <b>${mem(id).prefs[t.prefKey] || '—'}</b></span>`).join('')}</div>
+      <div class="notice" style="margin-top:10px">${svg(I.info)}<span>${rule
+        ? `现有约定：${rule.title} —— ${rule.desc}${rule.history && rule.history.length ? `（第 ${rule.history.length + 1} 版）` : ''}`
+        : '目前还没有相关约定，这次一起定下来。'}</span></div>
+    </div>` : rule ? `${sec('涉及的约定')}
+    <div class="card pad"><div class="notice">${svg(I.info)}<span>${rule.title} —— ${rule.desc}</span></div></div>` : ''}
+
+    ${sec('当前方案', `第 ${t.version} 版`, talking && !editing ? `<button class="btn sm" data-act="proposalEdit" data-id="${t.id}">调整方案</button>` : '')}
+    <div class="card pad">
+      ${editing ? `
+        <label for="prop-${t.id}">改成什么样，大家更能接受？</label>
+        <textarea id="prop-${t.id}" rows="3">${t.proposal}</textarea>
+        <div class="notice" style="margin-top:10px">${svg(I.info)}<span>方案改了就是新的一版：之前每个人的表态都要重新确认，也包括你自己的${inc && t.origin === 'lin' ? `；会一并请 ${inc.name} 确认一次` : ''}。</span></div>
+        <div class="btnrow" style="margin-top:11px"><button class="btn pri sm" data-act="proposalSave" data-id="${t.id}">保存为第 ${t.version + 1} 版</button>
+          <button class="btn sm" data-act="proposalCancel" data-id="${t.id}">取消</button></div>`
+      : `<p class="tp-prop">${t.proposal}</p>`}
+    </div>
+
+    ${sec('各成员意见', '只显示每个人当前有效的态度')}
+    <div class="card rows">${people.map(id => { const s = stanceOf(t, id), p = t.positions[id];
+      return `<div class="row"><div class="main"><div class="ttl">${av(id, 'sm')}${mem(id).name}${id === ME ? '（你）' : ''}
+          <span class="pill ${STANCE_PILL[s.k]}">${s.text}</span></div>
+        ${s.note ? `<div class="meta tp-quote">"${s.note}"</div>` : ''}
+        ${p && p.at && s.k !== 'provided' ? `<div class="meta">${p.at}</div>` : ''}</div></div>`; }).join('')}</div>
+
+    ${sec('讨论记录')}
+    <div class="card rows">${[...t.history].reverse().map(h => `<div class="row"><div class="main"><div class="ttl">${hist(h)}</div>${h.at ? `<div class="meta">${h.at}</div>` : ''}</div></div>`).join('')}</div>
+
+    ${talking ? `<div class="btnrow" style="margin-top:14px"><button class="btn sm" data-act="holdTopic" data-id="${t.id}">这次先不调整，保持原有约定</button></div>`
+      : t.status === 'hold' ? `<div class="btnrow" style="margin-top:14px"><button class="btn sm" data-act="reopenTopic" data-id="${t.id}">重新提出</button></div>` : ''}`;
 }
 
 function vOnboard() {
@@ -1067,12 +1147,9 @@ function vLin() {
     </div>
 
     <div class="notice" style="margin-bottom:14px">${svg(I.info)}<span>
-      这份对比由系统计算：拿 ${inc.name} 填的偏好和现在家里的做法逐项比对，其余 ${d.same.length} 项保持不变，不需要全员重新确认一遍。</span></div>
-
-    ${S.linDiscussed
-      ? `<div class="card pad" style="border-color:var(--jade-line)"><b style="font-family:var(--f-d)">已发起讨论</b>
-         <p style="font-size:13.5px;color:var(--ink-2);margin-top:4px">这 ${d.diff.length} 项已进入「正在讨论」，全员表态后会更新为共同约定。</p></div>`
-      : `<button class="btn pri wide" data-act="discussLin">只讨论这 ${d.diff.length} 件事</button>`}`;
+      这份对比由系统计算：拿 ${inc.name} 填的偏好和现在家里的做法逐项比对。一致的 ${d.same.length} 项不需要再聊；
+      不同的 ${d.diff.length} 项已经直接放进「正在讨论」，每个人都可以去表态，随时能改。</span></div>
+    <button class="btn pri wide" data-act="go" data-tab="talk">回到正在讨论</button>`;
 }
 
 const LADDER = [
@@ -1124,7 +1201,7 @@ function vIssue() {
     </div>`;
 }
 
-const TALK_VIEWS = { onboard:vOnboard, lin:vLin, issue:vIssue };
+const TALK_VIEWS = { onboard:vOnboard, lin:vLin, issue:vIssue, topic:vTopic };
 
 /* ============================================================
    我的

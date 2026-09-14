@@ -303,7 +303,6 @@ const SEED = {
 
   me: 'yiming',
   onboardDone: { yiming:'8月12日', alex:'6月30日', tom:'6月30日', lin:'9月10日' },
-  linDiscussed: false,
   moveout: null,
   myPrefs: {},
   showAllPrefs: false,
@@ -336,21 +335,37 @@ S.visits.forEach(v => { const seed = SEED.visits.find(x => x.id === v.id);
   S.bills = S.bills.filter(b => b.title !== ft);
   S.feed = S.feed.filter(f => !(f.who === 'sys' && f.text.startsWith(ft)));
 }
-/* 演示约定：共识页的"正在讨论"也每次重新打开都回到起点。
-   讨论会一路改到规则（版本、措辞、新增）和问题记录，所以这一整片（议题、规则、
-   Lin 的讨论开关、问题记录）整体恢复到种子数据，相关的系统动态一并撤掉。
+/* 演示约定：共识页的讨论在同一个标签页里刷新会保留（表态、补充意见、方案版本都还在），
+   新开一个标签页 / 窗口时回到起点。
+   讨论会一路改到规则（版本、措辞、新增）和问题记录，所以回到起点时这一整片
+   （议题、规则、问题记录）整体恢复到种子数据，相关的系统动态一并撤掉。
    其他页面自己产生的动态（记账、库存、访客等）不受影响。 */
-{
+let freshOpen = true;
+try { freshOpen = !sessionStorage.getItem('hezu-open'); sessionStorage.setItem('hezu-open', '1'); } catch (e) {}
+if (freshOpen) {
   S.topics = structuredClone(SEED.topics);
   S.rules = structuredClone(SEED.rules);
   S.issues = structuredClone(SEED.issues);
-  S.linDiscussed = SEED.linDiscussed;
   const TALK_FEED = ['项差异已进入讨论', '暂不调整，保持原有约定', '的建议已提交全员确认', '进入重新确认',
     '新增讨论议题', '已提到家里一起讨论', '的标准被重新明确', '已更新到第', '已获全员确认，成为共同约定',
+    '达成了新的约定', '的方案调整到第', '重新打开了讨论',
     '按共同约定发出提醒', '发出了一次私下提醒', '提交了一份协调摘要'];
   S.feed = S.feed.filter(f => !(f.who === 'sys' && TALK_FEED.some(k => f.text.includes(k))));
 }
+delete S.linDiscussed;
+/* 更早版本存档里的议题用 votes 记表态，按现在的结构补齐 */
+S.topics.forEach(t => {
+  if (t.positions) return;
+  t.positions = {}; t.version = t.version || 1; t.history = t.history || [];
+  t.proposal = t.proposal || t.detail || '';
+  t.status = t.status === 'agreed' ? 'resolved' : t.status === 'hold' ? 'hold' : 'discussion';
+  Object.entries(t.votes || {}).forEach(([id, v]) =>
+    t.positions[id] = { stance: v === '同意' ? 'agree' : 'undecided', note:'', version:1, at:'' });
+  delete t.votes;
+});
 ME = S.me || 'yiming';
+/* 只关乎这一屏怎么显示、不需要记住的状态：对比区展开没有、哪张卡正在写补充意见 */
+const UI = { sameOpen:false, noteFor:null, editFor:null };
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 const logFeed = (who, text, t) => { S.feed.unshift({ who, text, t: t || '刚刚' }); S.feed = S.feed.slice(0, 10); };
 
@@ -457,7 +472,12 @@ function linDiff() {
   });
   return { same, diff, lin };
 }
-const rulesToRevisit = () => S.linDiscussed ? [] : linDiff().diff.filter(d => d.rule);
+/* 新室友入住引出的、还在讨论并且会改到某条现有约定的议题：首页用它提示"入住前有 N 件事待确认" */
+const rulesToRevisit = () => openTopics().filter(t => t.origin === 'lin')
+  .map(t => ({ topic:t, rule:S.rules.find(r => r.id === t.ruleId) }))
+  .filter(x => x.rule);
+/* 某条约定是否正被哪个议题讨论着 */
+const topicOnRule = rule => openTopics().find(t => (t.ruleId || t.revisit) === rule.id);
 
 /* 留宿上限从约定文字里读，约定改了判断跟着改 */
 function overnightRule() {
@@ -499,9 +519,72 @@ const inboxRequests = () => S.requests.filter(r => r.status === 'pending' &&
 const myRequests = () => S.requests.filter(r => r.from === ME);
 const openRequests = () => S.requests.filter(r => r.status === 'pending');
 
-/* ---------- 讨论：达成 / 暂不调整 ---------- */
-const openTopics = () => S.topics.filter(t => t.status === 'open' || (!t.status && !t.done));
+/* ---------- 讨论 ----------
+   一个议题 = 当前方案（proposal，可以改，改一次 version +1）+ 每个人对"这一版方案"的态度。
+   status：discussion 正在讨论 → resolved 大家都接受、写进约定；hold 是"暂不调整"。
+   positions[成员] = { stance:'agree' | 'disagree' | 'undecided', note, version, at }
+   每人只保留当前有效的一条，改主意就覆盖；来龙去脉记在 history 里。
+   对旧版方案的表态不算数（version 对不上就是"方案已调整，待重新确认"）。
+   Lin 不给自己的偏好投票：第 1 版方案本来就是按他填的偏好和家里的约定拟的，
+   他的状态是"偏好已提供"；方案被改过（version > 1）才需要 Lin 也确认一次。 */
+const STANCE_TEXT = { agree:'已同意', disagree:'不同意', undecided:'再想想', provided:'偏好已提供' };
+const TOPIC_CAT = { overnight:'访客', visitor:'访客', temp:'其他', quiet:'噪音', kitchen:'清洁', supply:'物品', smoke:'其他' };
+
+function newTopic(o) {
+  return { id:o.id || 'tp' + Date.now(), title:o.title, prefKey:o.prefKey || null,
+    origin:o.origin || 'member', ruleId:o.ruleId || o.revisit || null, revisit:o.revisit || null,
+    proposal:o.proposal, version:1, status:'discussion', openedAt:o.at || '',
+    positions:{}, history:[{ type:'open', who:o.by || 'sys', at:o.at || '', text:o.openText || '' }] };
+}
+const topicById  = id => S.topics.find(t => t.id === id);
+const openTopics = () => S.topics.filter(t => t.status === 'discussion');
 const holdTopics = () => S.topics.filter(t => t.status === 'hold');
+
+/* 谁的接受是这个议题需要的：在住的每个人；方案改过之后，也要请 Lin 再确认 */
+const topicNeeds = t => {
+  const ids = living().map(m => m.id), inc = incomingMember();
+  if (inc && t.origin === 'lin' && t.version > 1) ids.push(inc.id);
+  return ids;
+};
+/* 只认对当前这版方案的表态 */
+const positionOf    = (t, id) => { const p = t.positions[id]; return p && p.version === t.version ? p : null; };
+const stalePosition = (t, id) => { const p = t.positions[id]; return p && p.version !== t.version ? p : null; };
+const topicResolvable = t => topicNeeds(t).every(id => { const p = positionOf(t, id); return p && p.stance === 'agree'; });
+
+/* 议题里某个人现在的状态，卡片和详情页都用它 */
+function stanceOf(t, id) {
+  const inc = incomingMember(), isInc = inc && id === inc.id;
+  const p = positionOf(t, id), old = stalePosition(t, id);
+  if (p && p.stance !== 'provided') return { k:p.stance, text: isInc && p.stance === 'agree' ? '可以接受' : STANCE_TEXT[p.stance], note:p.note };
+  if (old && old.stance !== 'provided') return { k:'stale', text:'方案已调整，待重新确认', prev:old.stance, note:old.note };
+  if (isInc && t.origin === 'lin') return { k:'provided', text: t.version > 1 ? '方案调整后，待确认' : '偏好已提供', note: p ? p.note : old ? old.note : '' };
+  return { k:'none', text:'待表态', note:'' };
+}
+/* 议题为什么还开着：几个人接受、几个人不同意、几个人还没说 */
+function topicSummary(t) {
+  const n = { agree:0, disagree:0, undecided:0, none:0 };
+  topicNeeds(t).forEach(id => { const s = stanceOf(t, id).k; n[s === 'stale' || s === 'provided' ? 'none' : s]++; });
+  const parts = [];
+  if (n.agree) parts.push(`${n.agree} 人接受`);
+  if (n.disagree) parts.push(`${n.disagree} 人不同意`);
+  if (n.undecided) parts.push(`${n.undecided} 人再想想`);
+  if (n.none) parts.push(`${n.none} 人还没表态`);
+  return parts.join(' · ');
+}
+
+/* 新室友的偏好和家里做法不同的地方，系统比对完就直接放进"正在讨论"，不需要谁来"发起" */
+function ensureLinTopics() {
+  const d = linDiff();
+  if (!d.lin) return;
+  d.diff.forEach(x => {
+    if (S.topics.some(t => t.origin === 'lin' && t.prefKey === x.k)) return;
+    S.topics.push(newTopic({ id:`tp-lin-${x.k}`, title:x.label, prefKey:x.k, origin:'lin', ruleId:x.rule && x.rule.id,
+      proposal: SUGGESTION[x.k] || `现在家里是${x.house}，${d.lin.name} 的偏好是${x.lin}，一起定一个大家都接受的做法。`,
+      by:'sys', at:d.lin.prefsSrc.at,
+      openText:`${d.lin.name} 填的偏好「${x.lin}」和家里现在的做法「${x.house}」不同，系统把它放进讨论` }));
+  });
+}
+ensureLinTopics();
 
 /* 已经处理过的问题不再重复提醒 */
 const needsReminder = issue => !issue.follow || issue.follow === 'self';
@@ -509,6 +592,6 @@ const needsReminder = issue => !issue.follow || issue.follow === 'self';
 const badge = tab => {
   if (tab === 'life')  return myTasks().filter(t => t.due === '今天').length + lowSupplies().length + inboxRequests().length;
   if (tab === 'bill')  return myDue().length;
-  if (tab === 'talk')  return rulesToRevisit().length + openTopics().length;
+  if (tab === 'talk')  return openTopics().length;
   return 0;
 };
