@@ -458,14 +458,10 @@ document.addEventListener('click', e => {
       sp.src = { via:'shared', at:TODAY };
     });
     pr.confirmed = true;
-    logFeed('sys', `全员确认了 ${mem(pr.who).name} 的公共空间分区`);
+    logFeed(ME, `确认了为 ${mem(pr.who).name} 准备的公共空间分区`);
     render(); toast(`已为 ${mem(pr.who).name} 分配 4 处分区，${mem(pr.who).joined}起生效`);
     break;
   }
-  case 'redivide':
-    toast('重新划分需要全员确认。当前分区是 6月2日 大家一起定的，改动会进入「正在讨论」。');
-    break;
-
   /* ---- 访客：每次登记都是一条记录，次数由记录累计 ---- */
   case 'newVisit': visitSheet(false); break;
   case 'doVisit': {
@@ -874,7 +870,7 @@ document.addEventListener('click', e => {
             unit:p.unit, max:p.qty * 2, src:mySrc() };
       S.supplies.push(s);
     }
-    applyPurchase(s, p.qty, p.amount, p.people, null, 'butler');
+    applyPurchase(s, p.qty, p.amount, p.people, s.mode === 'state' ? '充足' : null, 'butler');
     closeSheet(); goTo('bill');
     toast(`${s.name}更新为 ${supplyText(s)}，账单新增 ${yuan(p.amount)}，${perLabel(S.bills[0])}`);
     break;
@@ -983,14 +979,20 @@ function memberCountText() {
   return parts.join(' · ');
 }
 
+/* 搬出清单的说明按当前这个人的实际情况生成 */
 function defaultMoveout() {
+  const me = mem(ME);
+  const open = openBills().filter(b => b.payer === ME || b.people.includes(ME)).length;
+  const zones = []; S.spaces.forEach(sp => sp.zones.forEach(z => { if (z.o === ME) zones.push(`${sp.name} ${z.n}`); }));
+  const things = S.supplies.filter(x => x.owner === ME).map(x => x.name);
+  const tasks = S.tasks.filter(t => t.who === ME && !t.done).length;
   return { who:ME, items:[
-    { id:'m1', t:'结清未完成账单', m:'当前待结算 2 笔', done:false },
-    { id:'m2', t:'带走私人物品',   m:'02室 · 冰箱上层 · 鞋柜 A 区', done:false },
-    { id:'m3', t:'公共资产权益结算', m:'共同购买的电水壶、晾衣架', done:false },
-    { id:'m4', t:'清空并清洁分区', m:'交还前恢复原状', done:false },
+    { id:'m1', t:'结清未完成账单', m: open ? `当前和你有关的待结算 ${open} 笔` : '当前没有待结算的账', done:false },
+    { id:'m2', t:'带走私人物品',   m: [me.room, ...zones].join(' · ') + (things.length ? ` · 登记过：${things.join('、')}` : ''), done:false },
+    { id:'m3', t:'公共资产权益结算', m:'共同购买的电水壶、晾衣架等按约定处理', done:false },
+    { id:'m4', t:'清空并清洁分区', m: zones.length ? `${zones.length} 处分区交还前恢复原状` : '没有分区需要交还', done:false },
     { id:'m5', t:'归还钥匙与门禁卡', m:'交回租房中介的管家', done:false },
-    { id:'m6', t:'退出值日轮换',   m:'剩余任务重新分配', done:false }
+    { id:'m6', t:'退出值日轮换',   m: tasks ? `本周还有 ${tasks} 项任务会重新分配` : '本周没有分到任务', done:false }
   ] };
 }
 

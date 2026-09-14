@@ -310,12 +310,12 @@ const SEED = {
     { id:'b4', title:'阳台防水材料', note:'01室与03室共用阳台', amount:60, payer:'tom', kind:'other',
       people:['alex','tom'], method:'even', settled:false, date:'9月3日',
       src:{ via:'manual', by:'tom', at:'9月3日 15:30' } },
-    { id:'b5', title:'宽带费 9–11月', note:'联通 500M', amount:300, payer:'yiming', kind:'fixed',
-      people:['yiming','alex','tom'], method:'even', settled:true, date:'9月1日',
-      src:{ via:'manual', by:'yiming', at:'9月1日 09:40' } },
     { id:'b6', title:'厨房灯泡', note:'报修前先自行更换', amount:28, payer:'alex', kind:'other',
       people:['yiming','alex','tom'], method:'even', settled:true, date:'9月2日',
-      src:{ via:'manual', by:'alex', at:'9月2日 20:15' } }
+      src:{ via:'manual', by:'alex', at:'9月2日 20:15' } },
+    { id:'b5', title:'宽带费 9–11月', note:'联通 500M', amount:300, payer:'yiming', kind:'fixed',
+      people:['yiming','alex','tom'], method:'even', settled:true, date:'9月1日',
+      src:{ via:'manual', by:'yiming', at:'9月1日 09:40' } }
   ],
   utilityForecast: { title:'9月水电费', amount:360, days:30, kind:'utility' },
   fairApplied: false,

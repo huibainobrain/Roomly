@@ -159,20 +159,23 @@ function butlerSheet(raw) {
   if (p.type === 'buy') {
     const per = p.amount / p.people.length;
     S.pending = p;
-    const after = (p.supply ? p.supply.qty : 0) + p.qty;
+    /* 数量型物品按数量累加；状态型（洗衣液这类只记档位的）买回来就是"充足" */
+    const stateMode = p.supply && p.supply.mode === 'state';
+    const after = stateMode ? '充足' : (p.supply ? p.supply.qty : 0) + p.qty;
+    const change = stateMode ? `${p.supply.state} → 充足` : p.supply ? `${p.supply.qty} → ${after} ${p.unit}` : `+${p.qty} ${p.unit}`;
     openSheet(`<h3>管家理解成这样</h3>
       <p class="hint">这会同时改变库存和账单，所以先确认一下再执行。</p>
       ${understandBox('理解结果', [
         uline('物品', p.name),
-        uline('库存变化', p.supply ? `${p.supply.qty} → ${after} ${p.unit}` : `+${p.qty} ${p.unit}`),
+        uline(stateMode ? '状态变化' : '库存变化', change),
         uline('金额', yuan(p.amount)),
         uline('付款人', `${av(ME, 'sm')}${mem(ME).name}`),
         uline('参与分摊', p.people.map(x => av(x, 'sm')).join('')),
         uline('每人承担', `<span style="color:var(--jade)">${yuan(per)}</span>`)
       ])}
       ${impactBox([
-        `${p.name}库存更新为 ${after} ${p.unit}`,
-        p.supply && after >= p.supply.min ? '首页的库存不足提醒会消失' : '库存仍低于提醒水位，提醒会保留',
+        stateMode ? `${p.name}状态更新为充足` : `${p.name}库存更新为 ${after} ${p.unit}`,
+        stateMode || (p.supply && after >= p.supply.min) ? '首页的库存不足提醒会消失' : '库存仍低于提醒水位，提醒会保留',
         `账单新增一笔 ${yuan(p.amount)} 的公共支出，每人 ${yuan(per)}`,
         '家里动态增加一条记录'
       ])}

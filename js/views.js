@@ -88,7 +88,7 @@ function vHome() {
   const low = lowSupplies()[0];
   if (low && todos.length < 4) todos.push(`<div class="tcard c"><span class="tic">${svg(I.box)}</span>
       <div><div class="tt">${low.name}${low.mode === 'count' ? `只剩 ${low.qty} ${low.unit}` : low.state}</div>
-      <div class="ts">${srcNote(low.src)}更新</div></div>
+      <div class="ts">${srcNote(low.src)} 更新</div></div>
       <div class="tb"><button class="btn pri sm" data-act="restock" data-id="${low.id}">去补充</button></div></div>`);
 
   /* ---- 成员一行：点开是成员小卡，只放家里本来就公开的信息 ---- */
@@ -106,7 +106,7 @@ function vHome() {
   <section class="welcome">
     <div class="wl-text">
       <h1>${greet()}，${me.name}</h1>
-      <p>新的一天，从一个整洁、温暖的家开始。</p>
+      <p>${greetSub()}</p>
       <div class="wl-meta">${HOUSE.name} · 和室友一起住的第 ${daysTogether()} 天</div>
     </div>
     ${imgSlot('img/home-welcome.jpg', '待补欢迎横幅氛围图<br>窗边阳光 · 绿植 · 桌椅')}
@@ -166,6 +166,10 @@ function vHome() {
 function greet() {
   const h = parseInt(NOW.split(':')[0], 10);
   return h < 11 ? '早上好' : h < 14 ? '中午好' : h < 18 ? '下午好' : '晚上好';
+}
+function greetSub() {
+  const h = parseInt(NOW.split(':')[0], 10);
+  return h < 11 ? '新的一天，从一个整洁、温暖的家开始。' : h < 18 ? '家里的事都在这儿，看一眼就好。' : '忙了一天，回到一个整洁、温暖的家。';
 }
 /* 从当前用户入住那天算到今天，只用已有的租约数据 */
 function daysTogether() {
@@ -321,7 +325,7 @@ function vLife() {
       <header><span class="lci">${svg(I.space)}</span><h3>公共空间</h3>${S.zoneProposal.confirmed ? '' : '<i class="lcflag">1</i>'}</header>
       <ul class="lclist">${S.spaces.map(sp => {
         const z = sp.zones.find(x => x.o === ME);
-        return `<li><span>${sp.name}</span><b>${z ? '你的 · ' + z.n : '公共'}</b></li>`; }).join('')}</ul>
+        return `<li><span>${sp.name}</span><b>${z ? z.n + ' · 你的分区' : '没有你的分区'}</b></li>`; }).join('')}</ul>
       ${S.zoneProposal.confirmed ? '' : `<div class="lcnote warm">${mem(S.zoneProposal.who).name} 的分区待确认</div>`}
       <footer>${go('space', '查看分区')}</footer>
     </article>
@@ -388,7 +392,7 @@ function vChore() {
         ? `<button class="btn sm" data-act="undoTask" data-id="${t.id}">撤销</button>`
         : t.who === ME
           ? `<button class="btn sm pri" data-act="doneTask" data-id="${t.id}">${svg(I.check)}完成</button>
-             <button class="btn sm" data-act="deferTask" data-id="${t.id}">今天做不了</button>`
+             ${paused ? '' : `<button class="btn sm" data-act="deferTask" data-id="${t.id}">今天做不了</button>`}`
           : `<span class="pill plain">${mem(t.who).name} 负责</span>`}</div>
     </div>`;
   };
@@ -474,7 +478,7 @@ function vSupply() {
         <div class="owner">${av(s.owner)}${mem(s.owner).name} 登记${s.owner === ME ? '（你）' : ''}</div>
         <div class="rulenote">${s.rule}</div>
         <div class="foot"><span></span>${s.owner === ME
-          ? `<button class="btn sm" data-act="shareMode" data-id="${s.id}">共享方式</button>
+          ? `<button class="btn sm" data-act="manageThing" data-id="${s.id}">管理</button>
              <button class="btn sm" data-act="delThing" data-id="${s.id}">删除</button>`
           : `<button class="btn sm" data-act="borrow" data-id="${s.id}">${s.rule.startsWith('可直接') ? '登记借用' : '问一声'}</button>`}</div>
         ${srcTag(s.src)}</div>`;
@@ -485,7 +489,7 @@ function vSupply() {
       <div class="owner">${av(s.owner)}${mem(s.owner).name}${s.owner === ME ? '（你）' : ''}</div>
       <div class="rulenote">${s.owner === ME ? '只有你能看到具体内容。' : '这是私人区域，其他人不需要知道里面具体有什么。'}</div>
       ${s.owner === ME ? `<div class="foot"><span></span>
-        <button class="btn sm" data-act="shareMode" data-id="${s.id}">共享方式</button>
+        <button class="btn sm" data-act="manageThing" data-id="${s.id}">管理</button>
         <button class="btn sm" data-act="delThing" data-id="${s.id}">删除</button></div>` : ''}
       ${s.owner === ME ? srcTag(s.src) : ''}</div>`;
   };
@@ -1103,16 +1107,22 @@ function vOnboard() {
 
     ${r.talk.length ? `
     <div class="resgrp talk">
-      <div class="gh">${svg(I.info)}有 ${r.talk.length} 件事值得提前聊聊</div>
-      <div class="gb">${r.talk.map(t => `
+      <div class="gh">${svg(I.info)}有 ${r.talk.length} 项各人偏好不同</div>
+      <div class="gb">${r.talk.map(t => {
+        /* 偏好不同不等于没说好：已经有约定的按约定来，正在讨论的去讨论里表态 */
+        const rule = S.rules.find(x => x.prefKey === t.k), topic = openTopics().find(x => x.prefKey === t.k);
+        return `
         <div class="diffrow">
-          <div class="dt">${t.label}</div>
+          <div class="dt">${t.label}${rule ? '<span class="pill ok">已有约定</span>' : topic ? '<span class="pill peach">讨论中</span>' : ''}</div>
           <div class="vals">${t.vals.map(v => `<span class="val">${av(v.id, 'sm')}${mem(v.id).name} <b>${v.v}</b></span>`).join('')}</div>
-          ${SUGGESTION[t.k] ? `<div class="suggest"><div class="sl">管家建议</div><p>${SUGGESTION[t.k]}</p>
+          ${rule ? `<div class="rd" style="margin-top:8px;font-size:12.5px;color:var(--ink-2)">偏好虽然不同，但大家已经说好了：<b>${rule.title}</b>${rule.history && rule.history.length ? `（第 ${rule.history.length + 1} 版）` : ''}。想改的话去共识页重新讨论。</div>`
+          : topic ? `<div class="suggest"><div class="sl">当前方案</div><p>${topic.proposal}</p>
+            <div class="btnrow" style="margin-top:9px"><button class="btn pri sm" data-act="openTopic" data-id="${topic.id}">去讨论里表态</button></div></div>`
+          : SUGGESTION[t.k] ? `<div class="suggest"><div class="sl">管家建议</div><p>${SUGGESTION[t.k]}</p>
             <div class="btnrow" style="margin-top:9px">
               <button class="btn pri sm" data-act="acceptSuggest" data-k="${t.k}">接受这个建议</button>
               <button class="btn sm" data-act="editSuggest" data-k="${t.k}">一起修改</button></div></div>` : ''}
-        </div>`).join('')}</div>
+        </div>`; }).join('')}</div>
     </div>` : ''}
 
     ${sec('谁填过', '每个人的答案都是本人填的')}
@@ -1139,7 +1149,7 @@ function vLin() {
     </div>
 
     <div class="card pad" style="margin-bottom:12px">
-      <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin-bottom:7px">${inc.name} 本人填写的生活偏好</div>
+      <div style="font-size:11px;letter-spacing:.08em;color:var(--ink-3);font-weight:700;margin-bottom:7px">${inc.name} 本人填写的生活偏好</div>
       <div class="vals">
         ${['sleep','cook','pet','smoke','social'].map(k => `<span class="val" style="padding-left:10px">${PREF_KEYS.find(p => p.k === k).label} <b>${inc.prefs[k]}</b></span>`).join('')}
       </div>
@@ -1319,7 +1329,7 @@ function vMe() {
         <div class="ms-h"><span class="ms-i">${svg(I.chore)}</span><b>我的责任</b><span class="ms-sub">本周 ${tasks.length} 项</span></div>
         <ul class="melist tasks">${tasks.map(t => `<li class="${t.done ? 'dim' : ''}">
           <span class="ml-i">${svg(t.done ? I.check : I.chore)}</span>
-          <div><b>${t.task}</b>${t.done && t.doneAt ? `<span>${t.doneAt} 标记完成</span>` : t.note ? `<span>${t.note}</span>` : ''}</div>
+          <div><b>${t.task}</b>${t.done && t.doneAt ? `<span>${t.doneAt} 标记完成</span>` : taskPaused(t) ? '<span>登记离家中，已暂缓，回来后再做</span>' : t.deferred ? `<span>${t.deferred}</span>` : ''}</div>
           <span class="pill ${t.done ? 'ok' : 'warn'}">${t.done ? '已完成' : t.due}</span>
           ${t.done ? '' : `<button class="btn pri sm" data-act="doneTask" data-id="${t.id}">${svg(I.check)}完成</button>`}</li>`).join('')
           || '<li><div><b>这周没有分配给你的任务</b></div></li>'}</ul>
