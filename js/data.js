@@ -89,7 +89,38 @@ const mem = id => {
   const edits = typeof S !== 'undefined' && S && S.myPrefs && S.myPrefs[id];
   return edits ? { ...base, prefs: { ...base.prefs, ...edits } } : base;
 };
-const living = () => MEMBERS.filter(m => !m.incoming && !S.movedOut.includes(m.id)).map(m => mem(m.id));
+/* ---------- 成员生命周期 ----------
+   pending 租约已签、还没到入住日 → active 在住 → moved_out_pending_settlement 已搬出、账还没结清 → ended 成员关系结束
+   pending → active 由租约（机构同步）推动；搬出准备做完、机构确认退租 → 待结清；账全部结清 → ended。
+   页面和权限都按这个状态判断，不看"在不在成员列表里"。 */
+const membership = id => {
+  if (S.movedOut.includes(id)) return 'ended';
+  if (S.settling.includes(id)) return 'moved_out_pending_settlement';
+  const m = MEMBERS.find(x => x.id === id);
+  if (m && m.incoming && !S.activated.includes(id)) return 'pending';
+  return 'active';
+};
+const MEMBERSHIP_TEXT = { pending:'即将入住', active:'在住', moved_out_pending_settlement:'已搬出 · 待结清', ended:'已搬出' };
+/* 在住成员：任务、新账单、讨论表态、分区的默认参与人 */
+const living = () => MEMBERS.filter(m => membership(m.id) === 'active').map(m => mem(m.id));
+const incomingMember = () => MEMBERS.find(m => membership(m.id) === 'pending');
+const settlingMembers = () => MEMBERS.filter(m => membership(m.id) === 'moved_out_pending_settlement').map(m => mem(m.id));
+/* 家里的人：在住 + 即将入住 + 已搬出待结清；ended 的不再出现在家里 */
+const household = () => MEMBERS.filter(m => membership(m.id) !== 'ended').map(m => mem(m.id));
+/* 还有账要算的人：在住 + 已搬出待结清 */
+const accountHolders = () => [...living(), ...settlingMembers()];
+
+/* 权限按生命周期给。能力名：
+   tasks 值日 · bills 记账与本月结算 · pay 结清历史账单 · visits 访客 · laundry 洗衣机 · supplies 公共物品
+   spaces 分区 · talk 参与所有讨论 · talkOwn 只看和自己入住有关的讨论 · issues 居住问题记录 · requests 收发请求
+   away 离家登记 · moveout 搬出 · butler 管家 · feed 家里动态 · prefs 生活偏好 */
+const CAPS = {
+  active:  ['tasks','bills','pay','visits','laundry','supplies','spaces','talk','talkOwn','issues','requests','away','moveout','butler','feed','prefs','rules'],
+  pending: ['talkOwn','rules','prefs','zonesOwn'],
+  moved_out_pending_settlement: ['pay','prefs','rules'],
+  ended: ['prefs']
+};
+const can = (cap, id = ME) => CAPS[membership(id)].includes(cap);
 
 /* ============ 图标 ============ */
 const I = {
@@ -133,7 +164,7 @@ const svg = (p, w) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor
 /* ============ 展示辅助 ============ */
 const av = (id, cls = '') => {
   const m = mem(id);
-  const ghost = m.incoming || S.movedOut.includes(id);
+  const ghost = membership(id) !== 'active';
   return `<span class="av ${cls} ${id===ME?'me':''} ${ghost?'ghost':''}" ${ghost?'':`style="background:${m.c}"`} title="${m.name}">${
     m.photo ? `<img src="${m.photo}" alt="" onerror="this.remove()">` : ''}${m.short}</span>`;
 };
@@ -143,11 +174,13 @@ const yuan = n => {
 };
 /* 系统只知道谁登记了离家，不知道谁此刻在不在家 */
 const statusOf = id => {
-  if (S.movedOut.includes(id)) return 'gone';
-  if (mem(id).incoming) return 'incoming';
+  const ms = membership(id);
+  if (ms === 'ended') return 'gone';
+  if (ms === 'moved_out_pending_settlement') return 'settling';
+  if (ms === 'pending') return 'incoming';
   return S.away.some(a => a.who === id && a.active) ? 'away' : 'in';
 };
-const STATUS_TEXT = { in:'在住', away:'登记离家中', incoming:'即将入住', gone:'已搬出' };
+const STATUS_TEXT = { in:'在住', away:'登记离家中', incoming:'即将入住', settling:'已搬出 · 待结清', gone:'已搬出' };
 
 /* ============ 初始状态 ============ */
 const SUPPLY_STATES = ['充足', '不多了', '快用完', '已用完'];
@@ -156,7 +189,11 @@ const SEED = {
   tab: 'home',
   sub: null,
   segment: 'public',
+  /* 成员生命周期：activated 已到入住日转正的人；settling 已搬出待结清；movedOut 成员关系已结束 */
+  activated: [],
+  settling: [],
   movedOut: [],
+  moveoutRecord: null,
 
   /* 离家只有这一份原始记录，成员状态、值日、采购、公平分摊都由它推导 */
   away: [
@@ -226,20 +263,22 @@ const SEED = {
     items:[{ sp:'sp1', n:'保鲜抽屉' },{ sp:'sp2', n:'D 格' },{ sp:'sp3', n:'D 层' },{ sp:'sp4', n:'D 区' }] },
 
   /* 访客逐条登记，留宿次数由这些记录累计得出 */
+  /* guest 是登记人给访客起的称呼（不需要真名），同一个 host 下同一个称呼就是同一个人（guestId = host:称呼）。
+     "同一访客每周最多留宿 2 晚"按 host + guestId + 本周 累计，不会把一个人的所有访客加在一起。 */
   visits: [
-    { id:'v4', host:'alex', guest:'朋友', guestPhoto:'img/guest-1.jpg', date:'今天',  time:'19:00–22:00', overnight:false, week:true,
+    { id:'v4', host:'alex', guest:'女朋友', guestId:'alex:女朋友', guestPhoto:'img/guest-1.jpg', date:'今天',  time:'19:00–22:00', overnight:false, week:true,
       src:{ via:'member', by:'alex', at:'昨天 21:10' } },
-    { id:'v3', host:'alex', guest:'朋友', guestPhoto:'img/guest-1.jpg', date:'9月11日', time:'20:30 起', overnight:true, week:true,
+    { id:'v3', host:'alex', guest:'女朋友', guestId:'alex:女朋友', guestPhoto:'img/guest-1.jpg', date:'9月11日', time:'20:30 起', overnight:true, week:true,
       src:{ via:'member', by:'alex', at:'9月11日 20:05' } },
-    { id:'v2', host:'alex', guest:'朋友', guestPhoto:'img/guest-1.jpg', date:'9月10日', time:'21:00 起', overnight:true, week:true,
+    { id:'v2', host:'alex', guest:'女朋友', guestId:'alex:女朋友', guestPhoto:'img/guest-1.jpg', date:'9月10日', time:'21:00 起', overnight:true, week:true,
       src:{ via:'member', by:'alex', at:'9月10日 20:40' } },
-    { id:'v1', host:'alex', guest:'朋友', guestPhoto:'img/guest-1.jpg', date:'9月9日',  time:'20:00 起', overnight:true, week:true,
+    { id:'v1', host:'alex', guest:'女朋友', guestId:'alex:女朋友', guestPhoto:'img/guest-1.jpg', date:'9月9日',  time:'20:00 起', overnight:true, week:true,
       src:{ via:'member', by:'alex', at:'9月9日 19:30' } }
   ],
   /* 请求原语：借物、换班、额外留宿共用一套生命周期
      pending → agreed / declined / discuss，双方都能看到结果 */
   requests: [
-    { id:'rq1', kind:'stay', from:'alex', to:'all', subject:'朋友本周再留宿 1 晚',
+    { id:'rq1', kind:'stay', from:'alex', to:'all', subject:'女朋友本周再留宿 1 晚', guest:'女朋友', guestId:'alex:女朋友',
       detail:'按登记记录这会超过约定的每周 2 晚', status:'pending', at:'今天 19:40' }
   ],
 
@@ -256,27 +295,29 @@ const SEED = {
       ] }
   ],
 
+  /* kind：utility 水电燃气这类随使用变化的费用（离家可按天数分）· fixed 房租宽带这类固定成本（短期离家不重算）
+           supply 公共消耗品（按公共采购约定 AA）· other 其他 */
   bills: [
-    { id:'b1', title:'9月上半月水电', note:'国网 + 自来水', amount:180, payer:'alex',
+    { id:'b1', title:'9月上半月水电', note:'国网 + 自来水', amount:180, payer:'alex', kind:'utility',
       people:['yiming','alex','tom'], method:'even', settled:false, date:'9月10日',
       src:{ via:'manual', by:'alex', at:'9月10日 19:22' } },
-    { id:'b2', title:'公共清洁用品', note:'洗衣液 · 消毒液 · 抹布', amount:48, payer:'tom',
+    { id:'b2', title:'公共清洁用品', note:'洗衣液 · 消毒液 · 抹布', amount:48, payer:'tom', kind:'supply',
       people:['yiming','alex','tom'], method:'even', settled:false, date:'9月6日',
       src:{ via:'supply', by:'tom', at:'9月6日 20:10' } },
-    { id:'b3', title:'公共纸品补充', note:'厕纸 · 厨房纸', amount:30, payer:'yiming',
+    { id:'b3', title:'公共纸品补充', note:'厕纸 · 厨房纸', amount:30, payer:'yiming', kind:'supply',
       people:['yiming','alex','tom'], method:'even', settled:false, date:'9月4日',
       src:{ via:'supply', by:'yiming', at:'9月4日 18:50' } },
-    { id:'b4', title:'阳台防水材料', note:'01室与03室共用阳台', amount:60, payer:'tom',
+    { id:'b4', title:'阳台防水材料', note:'01室与03室共用阳台', amount:60, payer:'tom', kind:'other',
       people:['alex','tom'], method:'even', settled:false, date:'9月3日',
       src:{ via:'manual', by:'tom', at:'9月3日 15:30' } },
-    { id:'b5', title:'宽带费 9–11月', note:'联通 500M', amount:300, payer:'yiming',
+    { id:'b5', title:'宽带费 9–11月', note:'联通 500M', amount:300, payer:'yiming', kind:'fixed',
       people:['yiming','alex','tom'], method:'even', settled:true, date:'9月1日',
       src:{ via:'manual', by:'yiming', at:'9月1日 09:40' } },
-    { id:'b6', title:'厨房灯泡', note:'报修前先自行更换', amount:28, payer:'alex',
+    { id:'b6', title:'厨房灯泡', note:'报修前先自行更换', amount:28, payer:'alex', kind:'other',
       people:['yiming','alex','tom'], method:'even', settled:true, date:'9月2日',
       src:{ via:'manual', by:'alex', at:'9月2日 20:15' } }
   ],
-  utilityForecast: { title:'9月水电费', amount:360, days:30 },
+  utilityForecast: { title:'9月水电费', amount:360, days:30, kind:'utility' },
   fairApplied: false,
 
   rules: [
@@ -336,6 +377,13 @@ S.visits.forEach(v => { const seed = SEED.visits.find(x => x.id === v.id);
   if (seed && seed.guestPhoto && !v.guestPhoto) v.guestPhoto = seed.guestPhoto; });
 S.supplies.forEach(x => { const seed = SEED.supplies.find(y => y.id === x.id);
   if (seed && seed.photo && !x.photo) x.photo = seed.photo; });
+/* 访客身份和费用类型是后加的字段：老存档里的登记按"登记人:称呼"补上 guestId，账单按标题推断类型 */
+S.visits.forEach(v => { const seed = SEED.visits.find(x => x.id === v.id);
+  if (seed && !v.guestId) { v.guest = seed.guest; v.guestId = seed.guestId; }
+  if (!v.guestId) v.guestId = `${v.host}:${(v.guest || '朋友').trim()}`; });
+S.requests.forEach(r => { if (r.id === 'rq1' && !r.guestId) Object.assign(r, { subject:SEED.requests[0].subject, guest:'女朋友', guestId:'alex:女朋友' }); });
+S.bills.forEach(b => { const seed = SEED.bills.find(x => x.id === b.id); if (seed && !b.kind) b.kind = seed.kind; });
+if (!S.utilityForecast.kind) S.utilityForecast.kind = 'utility';
 /* 更早的存档把偏好修改存成一份扁平对象，现在按人存 */
 if (S.myPrefs && Object.keys(S.myPrefs).some(k => PREF_KEYS.some(p => p.k === k))) S.myPrefs = { [S.me || 'yiming']: S.myPrefs };
 /* 约定对应的偏好值是后加的字段，老存档按 id 补上 */
@@ -399,6 +447,23 @@ const perLabel = b => {
   return (new Set(v).size === 1 ? '每人 ' : '每人约 ') + yuan(Math.max(...v));
 };
 const BILL_SRC = { manual:'手动记录', supply:'补充公共用品时自动生成', butler:'通过管家创建' };
+/* 费用类型决定"公平"怎么算：只有随使用变化的费用才建议按离家天数分 */
+const BILL_KIND = { utility:'水电燃气', fixed:'固定成本', supply:'公共消耗品', other:'其他' };
+const BILL_KIND_HINT = {
+  utility:'随使用变化的费用，有人登记离家时可以按在住天数分',
+  fixed:'房租、宽带这类固定成本，短期离家不重算，按家里约定平均分',
+  supply:'按公共采购约定 AA，不套用离家天数',
+  other:'按参与的人平均分'
+};
+function guessBillKind(title, via) {
+  if (via === 'supply') return 'supply';
+  const t = title || '';
+  if (/水|电|燃气|煤气|暖气/.test(t)) return 'utility';
+  if (/房租|租金|宽带|网费|物业|押金|保洁费|服务费/.test(t)) return 'fixed';
+  if (/纸|袋|洗|清洁|用品|消毒|抹布|洗衣液|洗洁精/.test(t)) return 'supply';
+  return 'other';
+}
+const billKindOf = b => b.kind || guessBillKind(b.title, b.src && b.src.via);
 
 const openBills  = () => S.bills.filter(b => !b.settled);
 const myDue      = () => openBills().filter(b => b.payer !== ME && b.people.includes(ME));
@@ -407,7 +472,7 @@ const monthTotal = () => S.bills.reduce((a, b) => a + b.amount, 0);
 
 function netSettlement() {
   const bal = {};
-  living().forEach(m => bal[m.id] = 0);
+  accountHolders().forEach(m => bal[m.id] = 0);
   openBills().forEach(b => {
     if (bal[b.payer] != null) bal[b.payer] += b.amount;
     b.people.forEach(p => { if (bal[p] != null) bal[p] -= shareOf(b, p); });
@@ -443,9 +508,25 @@ const isLow = s => s.mode === 'count' ? s.qty < s.min : ['快用完', '已用完
 const lowSupplies = () => S.supplies.filter(s => s.kind === 'public' && isLow(s));
 const supplyText = s => s.mode === 'count' ? `${s.qty} ${s.unit}` : s.state;
 
-/* ---------- 访客：次数由逐条记录累计 ---------- */
-const nightsOf = id => S.visits.filter(v => v.host === id && v.overnight && v.week)
-                               .reduce((n, v) => n + (v.nights || 1), 0);
+/* ---------- 访客：次数由逐条记录累计，按"谁的哪一位访客"分开算 ---------- */
+const guestKey = (host, name) => `${host}:${(name || '朋友').trim()}`;
+/* 某位成员登记过的访客：称呼、头像、本周留宿几晚 */
+const guestsOf = host => {
+  const out = [];
+  S.visits.filter(v => v.host === host).forEach(v => {
+    let g = out.find(x => x.guestId === v.guestId);
+    if (!g) { g = { guestId:v.guestId, guest:v.guest, photo:v.guestPhoto, nights:0, visits:0, last:v.date }; out.push(g); }
+    g.visits++; if (v.overnight && v.week) g.nights += (v.nights || 1);
+    if (!g.photo && v.guestPhoto) g.photo = v.guestPhoto;
+  });
+  return out;
+};
+/* 本周留宿晚数：指定访客就只算这一位；不指定就取这位成员留宿最多的那位访客 */
+const nightsOf = (host, guestId) => {
+  const rows = S.visits.filter(v => v.host === host && v.overnight && v.week && (!guestId || v.guestId === guestId));
+  if (guestId) return rows.reduce((n, v) => n + (v.nights || 1), 0);
+  return Math.max(0, ...guestsOf(host).map(g => g.nights));
+};
 const tonightVisits = () => S.visits.filter(v => v.date === '今天');
 
 /* ---------- 洗衣机 ---------- */
@@ -469,7 +550,6 @@ const taskPaused = t => statusOf(t.who) === 'away';
 
 const awayMembers = () => S.away.filter(a => a.active);
 const awayOf = id => S.away.find(a => a.who === id && a.active);
-const incomingMember = () => MEMBERS.find(m => m.incoming && !S.movedOut.includes(m.id));
 
 function linDiff() {
   const lin = incomingMember();
@@ -494,14 +574,18 @@ const rulesToRevisit = () => openTopics().filter(t => t.origin === 'lin')
 const topicOnRule = rule => openTopics().find(t => (t.ruleId || t.revisit) === rule.id);
 
 /* 留宿上限从约定文字里读，约定改了判断跟着改 */
+/* 约定是"同一访客"每周最多几晚，所以按 host + guestId 分别累计，取最多的那一对来判断 */
 function overnightRule() {
   const rule = S.rules.find(x => x.prefKey === 'overnight');
   if (!rule) return null;
   const m = (rule.title + rule.desc).match(/(\d+)\s*晚/);
   const limit = m ? +m[1] : 2;
-  const actual = Math.max(0, ...living().map(x => nightsOf(x.id)));
-  const who = living().find(x => nightsOf(x.id) === actual);
-  return { rule, limit, actual, who: who && who.id, exceeded: actual > limit };
+  const pairs = [];
+  household().forEach(x => guestsOf(x.id).forEach(g => { if (g.nights) pairs.push({ host:x.id, ...g }); }));
+  pairs.sort((a, b) => b.nights - a.nights);
+  const top = pairs[0];
+  const actual = top ? top.nights : 0;
+  return { rule, limit, actual, who: top && top.host, guest: top && top.guest, guestId: top && top.guestId, pairs, exceeded: actual > limit };
 }
 
 /* 某一项上"家里现在的做法"：有对应约定就按约定对应的选项值，没有就按在住成员的多数 */
@@ -546,11 +630,17 @@ const SUGGESTION = {
 };
 
 /* ---------- 请求：谁发起、发给谁、什么状态 ---------- */
-const REQ_LABEL = { borrow:'借用物品', swap:'换班', stay:'额外留宿' };
-const REQ_STATUS = { pending:'等待回应', agreed:'已同意', declined:'对方不方便', discuss:'转为一起讨论' };
-/* 需要我回应的：指名给我的，或发给全体但不是我发起的 */
-const inboxRequests = () => S.requests.filter(r => r.status === 'pending' &&
-  r.from !== ME && (r.to === ME || r.to === 'all'));
+const REQ_LABEL = { borrow:'借用物品', swap:'换班', stay:'额外留宿', zone:'分区调整' };
+const REQ_STATUS = { pending:'等待回应', agreed:'已同意', declined:'对方不方便', discuss:'转为一起讨论', cancelled:'已取消' };
+/* 需要我回应的：指名给我的，或发给全体但不是我发起的；只有在住成员会收到请求 */
+const inboxRequests = () => can('requests') ? S.requests.filter(r => r.status === 'pending' &&
+  r.from !== ME && (r.to === ME || r.to === 'all')) : [];
+/* 物品的共享方式变了 / 物品删了 / 成员搬走了：还没处理的请求不能悬着 */
+function cancelRequests(pred, note) {
+  let n = 0;
+  S.requests.forEach(r => { if (r.status === 'pending' && pred(r)) { r.status = 'cancelled'; r.note = note; r.resolvedAt = stamp(); r.by = ME; n++; } });
+  return n;
+}
 const myRequests = () => S.requests.filter(r => r.from === ME);
 const openRequests = () => S.requests.filter(r => r.status === 'pending');
 
@@ -567,7 +657,7 @@ const TOPIC_CAT = { overnight:'访客', visitor:'访客', temp:'其他', quiet:'
 
 function newTopic(o) {
   return { id:o.id || 'tp' + Date.now(), title:o.title, prefKey:o.prefKey || null,
-    origin:o.origin || 'member', ruleId:o.ruleId || o.revisit || null, revisit:o.revisit || null,
+    origin:o.origin || 'member', subject:o.subject || null, ruleId:o.ruleId || o.revisit || null, revisit:o.revisit || null,
     proposal:o.proposal, version:1, status:'discussion', openedAt:o.at || '',
     positions:{}, history:[{ type:'open', who:o.by || 'sys', at:o.at || '', text:o.openText || '' }] };
 }
@@ -575,30 +665,46 @@ const topicById  = id => S.topics.find(t => t.id === id);
 const openTopics = () => S.topics.filter(t => t.status === 'discussion');
 const holdTopics = () => S.topics.filter(t => t.status === 'hold');
 
-/* 谁的接受是这个议题需要的：在住的每个人；方案改过之后，也要请 Lin 再确认 */
+/* 谁的接受是这个议题需要的：在住的每个人；由新室友偏好引出的议题，方案改过之后也要请这位新室友再确认 */
 const topicNeeds = t => {
-  const ids = living().map(m => m.id), inc = incomingMember();
-  if (inc && t.origin === 'lin' && t.version > 1) ids.push(inc.id);
+  const ids = living().map(m => m.id);
+  if (t.subject && !ids.includes(t.subject) && t.version > 1 && membership(t.subject) === 'pending') ids.push(t.subject);
   return ids;
 };
 /* 只认对当前这版方案的表态 */
 const positionOf    = (t, id) => { const p = t.positions[id]; return p && p.version === t.version ? p : null; };
 const stalePosition = (t, id) => { const p = t.positions[id]; return p && p.version !== t.version ? p : null; };
-const topicResolvable = t => topicNeeds(t).every(id => { const p = positionOf(t, id); return p && p.stance === 'agree'; });
+/* 第 1 版方案本来就是按新室友填的偏好拟的，他不用再对自己的偏好表态 */
+const providedFor = (t, id) => t.subject === id && t.version === 1;
+const topicResolvable = t => topicNeeds(t).every(id => { const p = positionOf(t, id); return (p && p.stance === 'agree') || providedFor(t, id); });
 
 /* 议题里某个人现在的状态，卡片和详情页都用它 */
 function stanceOf(t, id) {
-  const inc = incomingMember(), isInc = inc && id === inc.id;
+  const isSub = t.subject === id;
   const p = positionOf(t, id), old = stalePosition(t, id);
-  if (p && p.stance !== 'provided') return { k:p.stance, text: isInc && p.stance === 'agree' ? '可以接受' : STANCE_TEXT[p.stance], note:p.note };
+  if (p && p.stance !== 'provided') return { k:p.stance, text: isSub && p.stance === 'agree' ? '可以接受' : STANCE_TEXT[p.stance], note:p.note };
   if (old && old.stance !== 'provided') return { k:'stale', text:'方案已调整，待重新确认', prev:old.stance, note:old.note };
-  if (isInc && t.origin === 'lin') return { k:'provided', text: t.version > 1 ? '方案调整后，待确认' : '偏好已提供', note: p ? p.note : old ? old.note : '' };
+  if (isSub) return { k:'provided', text: t.version > 1 ? '方案调整后，待确认' : '偏好已提供', note: p ? p.note : old ? old.note : '' };
   return { k:'none', text:'待表态', note:'' };
 }
+/* "家里还有议题没达成" ≠ "现在需要我做事"。需要我做的只有：还没表态、方案改过要重新确认、
+   新室友在方案调整后要确认。"再想想"已经是一个决定，只有别人都接受了、只剩我时才再提醒一次。 */
+function topicNeedsMe(t, id = ME) {
+  if (t.status !== 'discussion' || !topicNeeds(t).includes(id)) return false;
+  const s = stanceOf(t, id);
+  if (s.k === 'none' || s.k === 'stale') return true;
+  if (s.k === 'provided') return t.version > 1;
+  if (s.k === 'undecided') return topicNeeds(t).filter(x => x !== id)
+    .every(x => { const p = positionOf(t, x); return (p && p.stance === 'agree') || providedFor(t, x); });
+  return false;
+}
+const myPendingTopics = (id = ME) => openTopics().filter(t => topicNeedsMe(t, id));
+/* 讨论范围：在住成员看全部；即将入住的只看由自己入住引出的 */
+const visibleTopics = (id = ME) => can('talk', id) ? openTopics() : can('talkOwn', id) ? openTopics().filter(t => t.subject === id) : [];
 /* 议题为什么还开着：几个人接受、几个人不同意、几个人还没说 */
 function topicSummary(t) {
   const n = { agree:0, disagree:0, undecided:0, none:0 };
-  topicNeeds(t).forEach(id => { const s = stanceOf(t, id).k; n[s === 'stale' || s === 'provided' ? 'none' : s]++; });
+  topicNeeds(t).forEach(id => { const s = stanceOf(t, id).k; n[s === 'stale' ? 'none' : s === 'provided' ? (t.version > 1 ? 'none' : 'agree') : s]++; });
   const parts = [];
   if (n.agree) parts.push(`${n.agree} 人接受`);
   if (n.disagree) parts.push(`${n.disagree} 人不同意`);
@@ -613,7 +719,7 @@ function ensureLinTopics() {
   if (!d.lin) return;
   d.diff.forEach(x => {
     if (S.topics.some(t => t.origin === 'lin' && t.prefKey === x.k)) return;
-    S.topics.push(newTopic({ id:`tp-lin-${x.k}`, title:x.label, prefKey:x.k, origin:'lin', ruleId:x.rule && x.rule.id,
+    S.topics.push(newTopic({ id:`tp-lin-${x.k}`, title:x.label, prefKey:x.k, origin:'lin', subject:d.lin.id, ruleId:x.rule && x.rule.id,
       proposal: SUGGESTION[x.k] || `现在家里是${x.house}，${d.lin.name} 的偏好是${x.lin}，一起定一个大家都接受的做法。`,
       by:'sys', at:d.lin.prefsSrc.at,
       openText:`${d.lin.name} 填的偏好「${x.lin}」和家里现在的做法「${x.house}」不同，系统把它放进讨论` }));
@@ -623,10 +729,15 @@ ensureLinTopics();
 
 /* 已经处理过的问题不再重复提醒 */
 const needsReminder = issue => !issue.follow || issue.follow === 'self';
+/* "仅自己留存"的记录只有本人看得到；不是在住成员的看不到问题记录 */
+const visibleIssues = (id = ME) => can('issues', id)
+  ? S.issues.filter(i => !(i.follow === 'self' && i.src && i.src.via === 'member' && i.src.by !== id)) : [];
 
+/* 导航红点 = 现在需要我本人做的动作，不是家里有多少事：
+   生活 = 今天轮到我的值日 + 等我回应的请求；账单 = 等我付的份额；共识 = 等我表态 / 重新确认的议题 */
 const badge = tab => {
-  if (tab === 'life')  return myTasks().filter(t => t.due === '今天').length + lowSupplies().length + inboxRequests().length;
-  if (tab === 'bill')  return myDue().length;
-  if (tab === 'talk')  return openTopics().length;
+  if (tab === 'life')  return can('tasks') ? myTasks().filter(t => t.due === '今天').length + inboxRequests().length : 0;
+  if (tab === 'bill')  return can('pay') ? myDue().length : 0;
+  if (tab === 'talk')  return myPendingTopics().length;
   return 0;
 };

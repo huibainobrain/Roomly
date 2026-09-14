@@ -25,15 +25,16 @@ function render() {
       ${svg(t.icon)}<span>${t.label}</span>${b ? `<span class="dot">${b}</span>` : ''}</button>`;
   }).join('');
 
-  const roster = MEMBERS.filter(m => !S.movedOut.includes(m.id));
+  /* 住所卡：在住的才算"在住"，即将入住 / 待结清的分开说 */
+  const roster = household(), inc = incomingMember(), settling = settlingMembers();
   document.getElementById('roster').innerHTML =
     roster.map(m => av(m.id, 'sm' + (statusOf(m.id) === 'in' ? '' : ' out'))).join('') +
-    `<span class="rmore">${living().length} 位成员</span>`;
+    `<span class="rmore">${memberCountText()}</span>`;
   document.getElementById('demoPanel').hidden = !S.demoPanel;
-  /* 即将入住的人也能切过去看：方案改过之后需要他确认一次 */
-  const inc = incomingMember();
-  document.getElementById('idList').innerHTML = [...living(), ...(inc ? [inc] : [])].map(m =>
-    `<button data-act="switchMe" data-k="${m.id}" aria-pressed="${m.id === ME}">${av(m.id, 'sm')}${m.name}${m.incoming ? '<small>即将入住</small>' : ''}</button>`).join('');
+  /* 演示身份：每个生命周期阶段的人都能切过去看，页面会按他的状态给权限 */
+  document.getElementById('idList').innerHTML = MEMBERS.map(m =>
+    `<button data-act="switchMe" data-k="${m.id}" aria-pressed="${m.id === ME}">${av(m.id, 'sm')}${m.name}${membership(m.id) !== 'active' ? `<small>${MEMBERSHIP_TEXT[membership(m.id)]}</small>` : ''}</button>`).join('');
+  document.getElementById('demoLin').hidden = !inc;
 
   const markSvg = svg('<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9.5 20v-5h5v5"/>');
   document.getElementById('markA').innerHTML = markSvg;
@@ -64,10 +65,21 @@ document.addEventListener('keydown', e => {
 /* ============================================================
    动作分发
    ============================================================ */
+/* 动作需要的权限：不是在住成员点了这些，只会得到一句说明，不会产生数据 */
+const ACTION_CAP = { newBill:'bills', butlerGo:'butler', butlerFill:'butler', newVisit:'visits', newAway:'away', newTask:'tasks',
+  washStart:'laundry', notifyWash:'laundry', restock:'supplies', inc:'supplies', dec:'supplies', setStock:'supplies', setState:'supplies',
+  newRepair:'feed', newThing:'supplies', borrow:'supplies', awkward:'talk', reqAgree:'requests', reqDecline:'requests', reqDiscuss:'requests',
+  confirmZones:'spaces', redivide:'spaces', zoneSwap:'spaces', doneTask:'tasks', deferTask:'tasks', applyFair:'bills', keepEven:'bills',
+  editBill:'bills', settle:'pay', unsettle:'pay', proposalEdit:'talk', holdTopic:'talk', reopenTopic:'talk' };
+const GATE_TEXT = { pending:'入住之后就能用这个功能。入住前只能看与你入住有关的事。',
+  moved_out_pending_settlement:'你已经搬出，不再参与家里的事务；历史账单结清之前还可以在账单页处理付款。',
+  ended:'你的成员关系已经结束，这个家的事务不再向你开放。' };
+
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
   if (!el) return;
   const act = el.dataset.act, id = el.dataset.id;
+  if (ACTION_CAP[act] && !can(ACTION_CAP[act])) { toast(GATE_TEXT[membership(ME)]); return; }
 
   switch (act) {
 
@@ -81,7 +93,7 @@ document.addEventListener('click', e => {
   case 'switchMe': {
     ME = el.dataset.k; S.me = ME; S.demoPanel = false; S.sub = null;
     UI.noteFor = null; UI.editFor = null;
-    render(); toast(`已切换到 ${mem(ME).name} 的视角，可以看到发给他的请求`);
+    render(); toast(`已切换到 ${mem(ME).name} 的视角（${MEMBERSHIP_TEXT[membership(ME)]}），页面按他的身份显示`);
     break;
   }
   /* 租房中介侧的变更由平台推送，住户不能自己改 */
@@ -91,6 +103,47 @@ document.addEventListener('click', e => {
     lin.lease = { via:'platform', at:stamp() };
     logFeed('sys', `租房中介更新了 ${lin.name} 的入住日期：${lin.joined}`);
     render(); toast(`租房中介已同步：${lin.name} 改为 ${lin.joined} 入住，相关页面已全部更新`);
+    break;
+  }
+  /* 租约生效由机构推送：pending → active，之后才参与任务、新账单和完整的家里事务 */
+  case 'activateMember': {
+    const m = incomingMember(); if (!m) break;
+    S.activated.push(m.id);
+    S.spaces.forEach(sp => sp.zones.forEach(z => { if (z.o === m.id) delete z.pending; }));
+    logFeed('sys', `租房中介同步：${m.name} 已入住 ${m.room}，成为正式成员`);
+    render(); toast(`${m.name} 已转为在住成员：从现在起参与值日、新公共费用和全部讨论`);
+    break;
+  }
+  /* 搬出：机构确认退租之后进入"待结清"——不再参与新的事务，但历史账要算完 */
+  case 'confirmMoveout': {
+    const who = ME, rec = { who, at:stamp(), zones:[], tasks:[] };
+    S.spaces.forEach(sp => sp.zones.forEach(z => { if (z.o === who) { rec.zones.push({ sp:sp.id, n:z.n }); z.o = 'public'; z.freed = who; } }));
+    S.settling.push(who);
+    const others = living();
+    S.tasks.forEach(t => { if (t.who === who && !t.done && others.length) {
+      const c = others.map(m => ({ id:m.id, load:S.tasks.filter(x => x.who === m.id && !x.done).length })).sort((a, b) => a.load - b.load)[0].id;
+      rec.tasks.push({ id:t.id }); t.who = c; t.deferred = `${mem(who).name} 已搬出，转给 ${mem(c).name}`; } });
+    cancelRequests(r => r.from === who || r.to === who, `${mem(who).name} 已搬出，本次请求已取消`);
+    S.away.forEach(a => { if (a.who === who) a.active = false; });
+    if (S.laundry.user === who) S.laundry = { user:null, startedAt:null, minutes:0, endsAt:null, notifyMe:false, src:null };
+    openTopics().forEach(t => { if (topicResolvable(t)) resolveTopic(t); });
+    S.moveoutRecord = rec; S.moveout = null;
+    const open = openBills().filter(b => b.payer === who || b.people.includes(who)).length;
+    logFeed('sys', `租房中介已确认 ${mem(who).name} 退租${open ? `，还有 ${open} 笔账单待结清` : ''}`);
+    checkSettled();
+    render(); toast(open ? `退租已确认。你不再参与家里的事务，结清 ${open} 笔账单后成员关系正式结束。` : '退租已确认，没有待结的账，成员关系已结束。');
+    break;
+  }
+  case 'undoMoveout': {
+    const rec = S.moveoutRecord, who = ME;
+    S.settling = S.settling.filter(x => x !== who); S.movedOut = S.movedOut.filter(x => x !== who);
+    if (rec && rec.who === who) {
+      rec.zones.forEach(({ sp, n }) => { const z = S.spaces.find(x => x.id === sp).zones.find(x => x.n === n); if (z) { z.o = who; delete z.freed; } });
+      rec.tasks.forEach(({ id:tid }) => { const t = S.tasks.find(x => x.id === tid); if (t) { t.who = who; t.deferred = null; } });
+    }
+    S.moveoutRecord = null;
+    logFeed('sys', `（演示）${mem(who).name} 恢复为在住成员`);
+    render(); toast('已恢复为在住成员，分区和任务都还给你了');
     break;
   }
 
@@ -104,9 +157,11 @@ document.addEventListener('click', e => {
     b.amount = amount;
     b.payer = document.getElementById('eb-p').value;
     b.people = [...sheetEl().querySelectorAll('#eb-w button[aria-pressed="true"]')].map(x => x.dataset.m);
+    b.kind = document.getElementById('eb-k').value;
     delete b.shares; b.method = 'even';
     b.src = { ...b.src, edited:stamp(), by:ME };
     logFeed(ME, `修改了费用「${b.title}」，金额改为 <b>${yuan(amount)}</b>`);
+    checkSettled();
     closeSheet(); render();
     toast(`已更新：${perLabel(b)}，本月合计 ${yuan(monthTotal())}，净额已重算`);
     break;
@@ -115,6 +170,7 @@ document.addEventListener('click', e => {
     const b = S.bills.find(x => x.id === id);
     S.bills = S.bills.filter(x => x.id !== id);
     logFeed(ME, `删除了费用「${b.title}」`);
+    checkSettled();
     closeSheet(); render();
     toast(`已删除。本月合计 ${yuan(monthTotal())}，待你支付 ${yuan(myDueTotal())}，净额已重算`);
     break;
@@ -148,18 +204,17 @@ document.addEventListener('click', e => {
     v.overnight = sheetEl().querySelector('#ev-o button[aria-pressed="true"]').dataset.v === '1';
     v.nights = v.overnight ? (v.nights || 1) : 0;
     v.src = mySrc();
-    const o = overnightRule();
+    const o = overnightRule(), n = nightsOf(v.host, v.guestId);
     closeSheet(); render();
-    toast(`已更新。${mem(v.host).name} 本周登记 ${nightsOf(v.host)} 晚，${o.exceeded ? '超过' : '仍在'}约定的 ${o.limit} 晚${o.exceeded ? '' : '之内'}`);
+    toast(`已更新。${mem(v.host).name} 的「${v.guest}」本周登记 ${n} 晚，${n > o.limit ? '超过' : '仍在'}约定的 ${o.limit} 晚${n > o.limit ? '' : '之内'}`);
     break;
   }
   case 'delVisit': {
     const v = S.visits.find(x => x.id === id);
     S.visits = S.visits.filter(x => x.id !== id);
-    const o = overnightRule();
     logFeed(ME, `取消了 ${v.date} 的访客登记`);
     closeSheet(); render();
-    toast(`已取消。${mem(v.host).name} 本周登记回到 ${nightsOf(v.host)} 晚，规则判断已重新运行`);
+    toast(`已取消。${mem(v.host).name} 的「${v.guest}」本周登记回到 ${nightsOf(v.host, v.guestId)} 晚，规则判断已重新运行`);
     break;
   }
   case 'editRepair': editRepairSheet(id); break;
@@ -307,9 +362,15 @@ document.addEventListener('click', e => {
         const t = S.tasks.find(x => x.id === r.task);
         if (t) { t.who = ME; t.deferred = `由 ${mem(r.from).name} 换给 ${mem(ME).name}，已同意`; }
       }
-      if (r.kind === 'stay') S.visits.unshift({ id:'v' + Date.now(), host:r.from, guest:'朋友',
+      if (r.kind === 'stay') S.visits.unshift({ id:'v' + Date.now(), host:r.from, guest:r.guest || '朋友', guestId:r.guestId || guestKey(r.from, r.guest),
         date:'今天', time:'经室友同意', overnight:true, nights:1, week:true,
         src:{ via:'member', by:r.from, at:stamp() } });
+      /* 分区调整：对方同意后两块分区互换，分区记录标为共同设定 */
+      if (r.kind === 'zone' && r.zone) {
+        const sp = S.spaces.find(x => x.id === r.zone.sp);
+        const a = sp && sp.zones.find(z => z.n === r.zone.from && z.o === r.from), b = sp && sp.zones.find(z => z.n === r.zone.to && z.o === ME);
+        if (a && b) { a.o = ME; b.o = r.from; sp.src = { via:'shared', at:TODAY }; logFeed('sys', `${sp.name}：${mem(r.from).name} 和 ${mem(ME).name} 交换了分区（${r.zone.from} ↔ ${r.zone.to}）`); }
+      }
     }
     if (r.status === 'discuss') {
       S.topics.push(newTopic({ title:REQ_LABEL[r.kind] + '：' + r.subject, proposal:r.detail, by:ME, at:stamp(),
@@ -335,9 +396,11 @@ document.addEventListener('click', e => {
     else { s.kind = 'lend'; s.rule = v === 'free' ? '可直接使用，用后清洗放回' : '使用前问一声'; }
     s.src = mySrc();
     S.segment = s.kind;
+    const n = v === 'ask' ? 0 : cancelRequests(r => r.kind === 'borrow' && r.thing === s.id,
+      v === 'private' ? `「${s.name}」的主人已改为不共享，本次请求已取消` : `「${s.name}」已改为可直接使用，不用再申请`);
     logFeed(ME, `把「${s.name}」的共享方式改为${v === 'private' ? '不共享' : v === 'free' ? '可直接使用' : '使用前询问'}`);
     closeSheet(); render();
-    toast(v === 'private' ? '已改为不共享，其他人的可借列表里立刻看不到了' : '已更新共享方式');
+    toast((v === 'private' ? '已改为不共享，其他人的可借列表里立刻看不到了' : '已更新共享方式') + (n ? `；${n} 条未处理的借用请求已取消并告知申请人` : ''));
     break;
   }
   case 'newThing': thingSheet(); break;
@@ -356,7 +419,13 @@ document.addEventListener('click', e => {
     toast(w === 'private' ? '已登记为私人物品，其他人只会看到这是私人区域' : '已登记为可借物品，室友能看到你写的使用方式');
     break;
   }
-  case 'delThing': S.supplies = S.supplies.filter(x => x.id !== id); render(); toast('已删除'); break;
+  case 'delThing': {
+    const x = S.supplies.find(y => y.id === id);
+    const n = cancelRequests(r => r.kind === 'borrow' && r.thing === id, `「${x ? x.name : '物品'}」已被主人删除，本次请求已取消`);
+    S.supplies = S.supplies.filter(y => y.id !== id);
+    render(); toast(n ? `已删除，${n} 条未处理的借用请求已一并取消并告知申请人` : '已删除');
+    break;
+  }
   /* 管理自己的物品：改共享方式、说明、位置；删除只是次要动作 */
   case 'manageThing': manageThingSheet(id); break;
   case 'doManageThing': {
@@ -371,7 +440,10 @@ document.addEventListener('click', e => {
     x.zone = zone || (x.kind === 'private' ? '未标注位置' : undefined);
     x.rule = x.kind === 'lend' ? (rule || (w === 'free' ? '可直接使用，用后清洗放回' : '使用前问一声')) : undefined;
     x.src = { ...(x.src || {}), via:'member', by:x.src && x.src.by || ME, at:x.src && x.src.at || stamp(), edited:stamp() };
-    closeSheet(); render(); toast(`已更新「${x.name}」：${x.kind === 'lend' ? '可借 · ' + x.rule : '私人物品'}`);
+    const n = x.kind === 'private'
+      ? cancelRequests(r => r.kind === 'borrow' && r.thing === x.id, `「${x.name}」的主人已改为不共享，本次请求已取消`)
+      : w === 'free' ? cancelRequests(r => r.kind === 'borrow' && r.thing === x.id, `「${x.name}」已改为可直接使用，不用再申请`) : 0;
+    closeSheet(); render(); toast(`已更新「${x.name}」：${x.kind === 'lend' ? '可借 · ' + x.rule : '私人物品'}${n ? `；${n} 条未处理的借用请求已取消并告知申请人` : ''}`);
     break;
   }
 
@@ -400,20 +472,23 @@ document.addEventListener('click', e => {
     const on = sheetEl().querySelector('#vo button[aria-pressed="true"]').dataset.v === '1';
     const host = document.getElementById('vh').value;
     const guest = document.getElementById('vg').value.trim() || '朋友';
+    const guestId = guestKey(host, guest);
     const date = document.getElementById('vd').value;
     const time = document.getElementById('vw').value.trim() || '未填时间';
     const nights = on ? Math.max(1, parseInt(document.getElementById('vn').value) || 1) : 0;
-    const had = nightsOf(host);
-    S.visits.unshift({ id:'v' + Date.now(), host, guest, date, time, overnight:on,
+    /* 次数只算这一位访客：同一个称呼就是同一个人 */
+    const had = nightsOf(host, guestId);
+    const known = guestsOf(host).find(g => g.guestId === guestId);
+    S.visits.unshift({ id:'v' + Date.now(), host, guest, guestId, guestPhoto: known && known.photo, date, time, overnight:on,
       nights: on ? nights : 0, week:true, src:mySrc() });
     const o = overnightRule();
     const over = on && had + nights > o.limit;
     if (over) newRequest('stay', 'all', `${guest}本周再留宿 ${nights} 晚`,
-      `按登记记录这会是本周第 ${had + nights} 晚，超过约定的每周 ${o.limit} 晚`);
+      `按登记记录这位访客本周会是第 ${had + nights} 晚，超过约定的每周 ${o.limit} 晚`, { guest, guestId });
     logFeed(ME, `登记了访客：${date} ${time}${on ? ` · 留宿 ${nights} 晚` : ''}`);
     closeSheet(); render();
-    toast(over ? `本周登记共 ${had + nights} 晚，超过约定的 ${o.limit} 晚，已向室友发出征询`
-        : on ? `已登记，本周共 ${had + nights} 晚，仍在约定之内`
+    toast(over ? `「${guest}」本周登记共 ${had + nights} 晚，超过约定的 ${o.limit} 晚，已向室友发出征询`
+        : on ? `已登记，「${guest}」本周共 ${had + nights} 晚，仍在约定之内`
         : '已登记，室友会看到这次到访');
     break;
   }
@@ -478,7 +553,8 @@ document.addEventListener('click', e => {
   case 'settle': {
     const b = S.bills.find(x => x.id === id); b.settled = true;
     logFeed(ME, `将「${b.title}」标记为已结清`);
-    render(); toast(`「${b.title}」已结清`);
+    const ended = checkSettled();
+    render(); toast(ended.length ? `「${b.title}」已结清。${ended.map(x => mem(x).name).join('、')} 的账已全部结清，成员关系正式结束。` : `「${b.title}」已结清`);
     break;
   }
   case 'unsettle': S.bills.find(x => x.id === id).settled = false; render(); break;
@@ -488,9 +564,11 @@ document.addEventListener('click', e => {
     const amount = parseFloat(document.getElementById('ba').value) || 0;
     if (amount <= 0) { toast('请填写大于 0 的金额'); document.getElementById('ba').focus(); return; }
     const payer = document.getElementById('bp').value;
-    const method = document.getElementById('bm').value;
+    const kind = document.getElementById('bk').value;
+    /* 只有随使用变化的费用才按在住天数分；固定成本和消耗品按家里约定 */
+    const method = kind === 'utility' ? document.getElementById('bm').value : 'even';
     const people = [...sheetEl().querySelectorAll('#bw button[aria-pressed="true"]')].map(b => b.dataset.m);
-    const bill = { id:'b' + Date.now(), title, note:'', amount, payer, people, method, settled:false,
+    const bill = { id:'b' + Date.now(), title, note:'', amount, payer, people, method, kind, settled:false,
       date:TODAY, src:{ via:'manual', by:ME, at:stamp() } };
     if (method === 'days') {
       const rows = people.map(pid => {
@@ -508,7 +586,7 @@ document.addEventListener('click', e => {
   }
   case 'applyFair': {
     const fd = fairByDays();
-    const bill = { id:'b' + Date.now(), title:S.utilityForecast.title, note:'按登记在住天数',
+    const bill = { id:'b' + Date.now(), title:S.utilityForecast.title, note:'按登记在住天数', kind:'utility',
       amount:S.utilityForecast.amount, payer:ME, people:living().map(m => m.id), method:'days',
       settled:false, date:TODAY, shares:{}, src:{ via:'manual', by:ME, at:stamp() } };
     fd.rows.forEach(r => bill.shares[r.id] = r.amount);
@@ -519,7 +597,7 @@ document.addEventListener('click', e => {
   }
   case 'keepEven': {
     S.fairApplied = true;
-    S.bills.unshift({ id:'b' + Date.now(), title:S.utilityForecast.title, note:'维持平均分摊',
+    S.bills.unshift({ id:'b' + Date.now(), title:S.utilityForecast.title, note:'维持平均分摊', kind:'utility',
       amount:S.utilityForecast.amount, payer:ME, people:living().map(m => m.id), method:'even',
       settled:false, date:TODAY, src:{ via:'manual', by:ME, at:stamp() } });
     logFeed('sys', `${S.utilityForecast.title}维持平均分摊`);
@@ -706,7 +784,7 @@ document.addEventListener('click', e => {
         proposal: rule ? rule.desc : it.note, openText:`由居住问题记录「${it.title}」发起，不显示是谁提的` }));
       logFeed('sys', `「${it.title}」已提到家里一起讨论`);
     }
-    if (k === 'steward') { it.level = 5; render(); stewardSheet(); return; }
+    if (k === 'steward') { it.level = 5; render(); stewardSheet(it.id); return; }
     render();
     toast(k === 'self' ? '已留存，只有你能看到' : k === 'remind' ? '提醒已私下发出，不点名' : '已放到家里一起讨论');
     break;
@@ -726,7 +804,22 @@ document.addEventListener('click', e => {
     closeSheet(); goTo('talk'); toast('已发起重新确认，问题记录回到第 1 级');
     break;
   }
-  case 'stewardBrief': stewardSheet(); break;
+  case 'stewardBrief': stewardSheet(id); break;
+  case 'member': memberSheet(id); break;
+  /* 分区不是个人能改的：想换要向对方发请求，对方同意才互换 */
+  case 'zoneSwap': zoneSwapSheet(id); break;
+  case 'doZoneSwap': {
+    const sp = S.spaces.find(x => x.id === sheetEl().dataset.spid);
+    const mine = sp.zones.find(z => z.o === ME);
+    const pick = sheetEl().querySelector('#zs-w button[aria-pressed="true"]');
+    if (!pick) { toast('先选一块想换的分区'); return; }
+    const target = sp.zones.find(z => z.n === pick.dataset.n);
+    newRequest('zone', target.o, `想和你换${sp.name}的分区`, `${mem(ME).name} 的 ${mine.n} ↔ 你的 ${target.n}，同意后两块互换`, { zone:{ sp:sp.id, from:mine.n, to:target.n } });
+    closeSheet(); render(); toast(`已向 ${mem(target.o).name} 发出分区调整请求，对方同意后才会互换`);
+    break;
+  }
+  /* 不好开口：确认说的是哪一位访客 */
+  case 'awkGuest': S.awk.host = el.dataset.h; S.awk.guestId = el.dataset.g || null; S.awk.step = 2; awkwardSheet(); break;
   case 'doSteward':
     closeSheet();
     logFeed('sys', `向${HOUSE.steward}提交了一份协调摘要`);
@@ -807,7 +900,7 @@ function applyPurchase(s, qty, amount, people, state, via) {
   if (amount > 0) {
     S.bills.unshift({ id:'b' + Date.now(), title:s.name,
       note: s.mode === 'count' ? `补充 ${qty} ${s.unit}` : `补充至${state || s.state}`,
-      amount, payer:ME, people:ppl, method:'even', settled:false, date:TODAY,
+      amount, payer:ME, people:ppl, method:'even', kind:'supply', settled:false, date:TODAY,
       src:{ via: via || 'supply', by:ME, at:stamp() } });
     logFeed(ME, `补充了${s.name}，并记了一笔 <b>${yuan(amount)}</b> 的公共支出`);
   } else {
@@ -870,6 +963,24 @@ function resolveTopic(t) {
     desc:t.proposal, by:living().map(m => m.id), since:TODAY, prefKey:t.prefKey, history:[],
     prefVal: t.prefKey ? prefValFromText(t.prefKey, t.proposal) : undefined });
   logFeed('sys', `大家就「${t.title}」达成了新的约定`);
+}
+
+/* 已搬出的人账全部结清 → 成员关系结束；返回这次结束了谁 */
+function checkSettled() {
+  const ended = [];
+  settlingMembers().forEach(m => {
+    const open = openBills().some(b => b.payer === m.id || b.people.includes(m.id));
+    if (!open) { S.settling = S.settling.filter(x => x !== m.id); S.movedOut.push(m.id); ended.push(m.id);
+      logFeed('sys', `${m.name} 的账务已全部结清，成员关系正式结束`); }
+  });
+  return ended;
+}
+/* 住所卡 / 首页的人数：在住 · 即将入住 · 待结清 分开说 */
+function memberCountText() {
+  const parts = [`${living().length} 位在住`];
+  const inc = incomingMember(); if (inc) parts.push(`1 位即将入住`);
+  const st = settlingMembers(); if (st.length) parts.push(`${st.length} 位已搬出待结清`);
+  return parts.join(' · ');
 }
 
 function defaultMoveout() {

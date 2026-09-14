@@ -299,10 +299,15 @@ function gapFor(focus) {
   if (FOCUS_RULE[focus] === 'overnight') {
     const o = overnightRule();
     if (!o) return null;
-    return { exceeded: o.exceeded, limit: o.limit, actual: o.actual,
-      text: o.exceeded
-        ? `根据当前登记记录，这位访客本周已留宿 ${o.actual} 晚，超过了大家约定的每周 ${o.limit} 晚。`
-        : `根据当前登记记录，这位访客本周已留宿 ${o.actual} 晚，仍在约定的每周 ${o.limit} 晚之内。` };
+    /* 说的是哪一位访客：用户在上一步确认过就按那一位算，没确认就取登记最多的那一对 */
+    const a = S.awk || {};
+    const pair = a.guestId ? o.pairs.find(p => p.guestId === a.guestId) : o.pairs[0];
+    const actual = pair ? pair.nights : 0;
+    const who = pair ? `${mem(pair.host).name} 登记为「${pair.guest}」的这位访客` : '这位访客';
+    return { exceeded: actual > o.limit, limit: o.limit, actual, guest: pair && pair.guest, host: pair && pair.host,
+      text: actual > o.limit
+        ? `根据当前登记记录，${who}本周已留宿 ${actual} 晚，超过了大家约定的每周 ${o.limit} 晚。`
+        : `根据当前登记记录，${who}本周已留宿 ${actual} 晚，仍在约定的每周 ${o.limit} 晚之内。` };
   }
   const it = S.issues.find(i => S.rules.find(r => r.id === i.rule && r.prefKey === FOCUS_RULE[focus]));
   if (it) return { exceeded: true, text: `${it.window}，系统就这条约定发出过 ${it.count} 次提醒。` };
@@ -363,6 +368,7 @@ function awkwardSheet() {
       ])}
       ${shifted ? `<div class="notice" style="margin-bottom:14px">${svg(I.info)}<span>
         看起来这件事更接近${readCat}问题，我按你实际描述的情况继续。</span></div>` : ''}
+      ${readCat === '访客' ? awkGuestPick(a) : ''}
       <div style="font-size:13px;color:var(--ink-2);margin-bottom:9px">这件事可能同时涉及：</div>
       <div class="vals" style="margin-bottom:16px">${focuses.map(f => `<span class="val" style="padding-left:10px">${f}</span>`).join('')}</div>
       <div style="font-size:13.5px;font-weight:600;margin-bottom:9px">你最希望先解决哪一个？</div>
@@ -431,7 +437,9 @@ function awkwardSheet() {
     const WAY = { private:'私下聊聊', house:'一起讨论', rule:'建立约定', remind:'按现有约定提醒',
                   clarify:'重新确认这条约定', watch:'先继续观察' };
     const draft = existing
-      ? `想和你对一下访客留宿的安排。我们之前说好的是同一访客每周最多留宿 ${gap ? gap.limit : 2} 晚，这周好像到 ${gap ? gap.actual : 3} 晚了。我不是要计较这个，就是想问问你最近是不是有什么特殊情况，需要的话我们把这条重新定一下也可以。`
+      ? (FOCUS_RULE[a.focus] === 'overnight'
+        ? `想和你对一下访客留宿的安排。我们之前说好的是同一访客每周最多留宿 ${gap ? gap.limit : 2} 晚，${gap && gap.guest ? `登记里「${gap.guest}」` : '这周'}好像到 ${gap ? gap.actual : 3} 晚了。我不是要计较这个，就是想问问你最近是不是有什么特殊情况，需要的话我们把这条重新定一下也可以。`
+        : `想和你对一下${a.focus}的事。我们之前有约定「${existing.title}」，最近的情况好像和它有点出入。我不是要计较，就是想问问是不是有什么特殊情况，需要的话我们把这条重新定一下也可以。`)
       : `想和你聊一下${a.focus}这件事。我们家里目前没有相关的约定，我想问问你的想法，看能不能定一个大家都舒服的方式。`;
 
     const impact = {
@@ -470,6 +478,66 @@ function awkwardSheet() {
           a.way === 'private' ? '发送' : a.way === 'remind' ? '发出提醒'
           : a.way === 'clarify' ? '发起重新确认' : a.way === 'watch' ? '就这样，先观察' : '发起讨论'}</button></div>`);
   }
+}
+
+/* 不好开口 · 访客类：先确认说的是哪一位访客。一位成员可能登记过好几位访客，不能把他们加在一起算 */
+function awkGuestPick(a) {
+  const o = overnightRule();
+  if (!o || !o.pairs.length) return '';
+  /* 原话里提到了谁，就先按那个人的访客列；没提到就按登记最多的那一对 */
+  const named = MEMBERS.find(m => m.id !== ME && a.text && a.text.includes(m.name));
+  const host = a.host || (named ? named.id : o.pairs[0].host);
+  const list = o.pairs.filter(p => p.host === host);
+  /* 只有一位就直接认；原话里点到了称呼（"女朋友"）也先按那位算，用户仍可以改 */
+  if (!a.host && !a.guestId) {
+    const hit = list.length === 1 ? list[0] : list.find(p => a.text && a.text.includes(p.guest));
+    if (hit) { a.host = host; a.guestId = hit.guestId; }
+  }
+  const cur = a.guestId;
+  return `<div style="font-size:13.5px;font-weight:600;margin-bottom:7px">你说的是哪一位访客？</div>
+    <div style="font-size:12.5px;color:var(--ink-3);margin-bottom:8px">${mem(host).name} 最近登记过 ${list.length} 位访客，留宿次数是按每一位分开算的。</div>
+    <div class="who-pick" style="margin-bottom:16px">
+      ${list.map(p => `<button type="button" data-act="awkGuest" data-h="${host}" data-g="${p.guestId}" aria-pressed="${cur === p.guestId}">${mem(host).name} 登记的「${p.guest}」<small style="font-weight:400;color:var(--ink-4)"> · 本周 ${p.nights} 晚</small></button>`).join('')}
+      <button type="button" data-act="awkGuest" data-h="${host}" data-g="" aria-pressed="${!cur}">不确定 / 另一位</button>
+    </div>`;
+}
+
+/* 成员小卡：只放家里本来就公开的信息——状态、房间、入住日、入住共识里的关键偏好、愿意借出的东西 */
+function memberSheet(id) {
+  const m = mem(id), st = statusOf(id), a = awayOf(id), ms = membership(id);
+  const lend = S.supplies.filter(s => s.kind === 'lend' && s.owner === id);
+  openSheet(`<h3 style="display:flex;align-items:center;gap:10px">${av(id, 'xl')}<span>${m.name}${id === ME ? '（你）' : ''}</span></h3>
+    <div class="vals" style="margin-top:6px">
+      <span class="val" style="padding-left:10px">状态 <b>${st === 'away' && a ? `登记离家中 · ${a.to} 回` : ms === 'pending' ? `${m.joined} 入住` : MEMBERSHIP_TEXT[ms]}</b></span>
+      <span class="val" style="padding-left:10px">房间 <b>${m.room}</b></span>
+      <span class="val" style="padding-left:10px">入住 <b>${m.joined}</b></span>
+    </div>
+    ${srcTag(m.lease)}
+    <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin:14px 0 6px">入住共识里填的关键偏好</div>
+    <div class="vals" style="margin-top:0">${KEY_PREFS.map(k => `<span class="val" style="padding-left:10px">${PREF_KEYS.find(p => p.k === k).label} <b>${m.prefs[k]}</b></span>`).join('')}</div>
+    <div class="srctag">${svg(I.info)}本人填写，只反映个人偏好，不是共同约定</div>
+    ${lend.length ? `<div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:700;margin:14px 0 6px">愿意借出的东西</div>
+      <div class="vals" style="margin-top:0">${lend.map(x => `<span class="val" style="padding-left:10px">${x.name} <b style="font-weight:400;color:var(--ink-3)">${x.rule}</b></span>`).join('')}</div>` : ''}
+    <div class="notice" style="margin-top:14px">${svg(I.shield)}<span>账单明细、私人物品、问题记录这些不在这里显示：它们只属于本人，或只在对应的模块里按权限出现。</span></div>
+    <div class="acts"><button class="btn" data-act="close">关闭</button></div>`);
+}
+
+/* 分区调整：个人不能直接改公共分区，只能向对方发请求，对方同意后两块互换 */
+function zoneSwapSheet(spId) {
+  const sp = S.spaces.find(x => x.id === spId);
+  const mine = sp.zones.find(z => z.o === ME);
+  const others = sp.zones.filter(z => z.o !== ME && z.o !== 'public' && !z.pending && membership(z.o) === 'active');
+  openSheet(`<h3>申请调整 · ${sp.name}</h3>
+    <p class="hint">分区是大家一起定的结果，不能自己改。你现在用的是 <b>${mine ? mine.n : '—'}</b>；选一块想换的，对方同意后两块互换。整体重新划分请去「公共空间」页。</p>
+    <div class="fld"><label>想换成</label><div class="who-pick" id="zs-w">${others.map(z =>
+      `<button type="button" data-n="${z.n}" aria-pressed="false">${av(z.o, 'sm')}${mem(z.o).name} 的 ${z.n}</button>`).join('') || '<span style="font-size:13px;color:var(--ink-3)">这个空间里没有可以交换的分区</span>'}</div></div>
+    ${impactBox(['只发给对方一个人，其他人不会收到', '对方同意后两块分区互换，记为共同设定', '对方不方便的话，一切保持不变'])}
+    ${acts('doZoneSwap', '发出请求')}`);
+  sheetEl().dataset.spid = spId;
+  sheetEl().querySelectorAll('#zs-w button').forEach(b => b.addEventListener('click', () => {
+    sheetEl().querySelectorAll('#zs-w button').forEach(x => x.setAttribute('aria-pressed', 'false'));
+    b.setAttribute('aria-pressed', 'true');
+  }));
 }
 
 /* ============================================================
@@ -627,7 +695,9 @@ function editBillSheet(id) {
     <p class="hint">改完之后，各人应付、本月合计和月末净额都会重新算一遍。</p>
     <div class="fld"><label for="eb-t">费用名称</label><input type="text" id="eb-t" value="${b.title}"></div>
     <div class="fld"><label for="eb-a">金额（元）</label><input type="number" id="eb-a" min="0" step="0.01" value="${b.amount}" inputmode="decimal"></div>
-    <div class="fld"><label for="eb-p">垫付人</label><select id="eb-p">${living().map(m =>
+    <div class="fld"><label for="eb-k">费用类型</label><select id="eb-k">${Object.entries(BILL_KIND).map(([k, v]) => `<option value="${k}" ${k === billKindOf(b) ? 'selected' : ''}>${v}</option>`).join('')}</select>
+      <div class="srctag" style="margin-top:6px">${BILL_KIND_HINT[billKindOf(b)]}${b.method === 'days' ? '；这笔现在按登记在住天数分，保存后改回平均分摊' : ''}</div></div>
+    <div class="fld"><label for="eb-p">垫付人</label><select id="eb-p">${accountHolders().map(m =>
       `<option value="${m.id}" ${m.id === b.payer ? 'selected' : ''}>${m.name}</option>`).join('')}</select></div>
     <div class="fld"><label>参与成员</label><div class="who-pick" id="eb-w">${living().map(m =>
       `<button type="button" data-m="${m.id}" aria-pressed="${b.people.includes(m.id)}">${av(m.id,'sm')}${m.name}</button>`).join('')}</div></div>
@@ -677,7 +747,7 @@ function editVisitSheet(id) {
     <div class="fld"><label>是否留宿</label><div class="who-pick" id="ev-o">
       <button type="button" data-v="0" aria-pressed="${!v.overnight}">不留宿</button>
       <button type="button" data-v="1" aria-pressed="${v.overnight}">留宿</button></div></div>
-    <div class="notice">${svg(I.info)}<span>当前 ${mem(v.host).name} 本周共登记 ${nightsOf(v.host)} 晚，约定是每周 ${o.limit} 晚。</span></div>
+    <div class="notice">${svg(I.info)}<span>当前 ${mem(v.host).name} 的「${v.guest}」本周共登记 ${nightsOf(v.host, v.guestId)} 晚，约定是同一访客每周 ${o.limit} 晚。</span></div>
     <div class="acts">
       <button class="btn danger" data-act="delVisit" data-id="${v.id}">取消这次登记</button>
       <button class="btn" data-act="close">返回</button>
@@ -752,20 +822,28 @@ function taskSheet() {
 
 function billSheet() {
   openSheet(`<h3>记一笔公共费用</h3>
-    <p class="hint">默认平均分摊。有人长期不在家时，可以改成按实际居住天数。</p>
+    <p class="hint">默认平均分摊。只有水电燃气这类随使用变化的费用，才会在有人离家时建议按在住天数分。</p>
     <div class="fld"><label for="bt">费用名称</label><input type="text" id="bt" placeholder="例如：9月水电费"></div>
+    <div class="fld"><label for="bk">费用类型</label><select id="bk">${Object.entries(BILL_KIND).map(([k, v]) => `<option value="${k}" ${k === 'other' ? 'selected' : ''}>${v}</option>`).join('')}</select>
+      <div class="srctag" id="bkHint" style="margin-top:6px"></div></div>
     <div class="fld"><label for="ba">金额（元）</label><input type="number" id="ba" min="0" step="0.01" placeholder="0.00" inputmode="decimal"></div>
     <div class="fld"><label for="bp">垫付人</label><select id="bp">${living().map(m => `<option value="${m.id}" ${m.id === ME ? 'selected' : ''}>${m.name}${m.id === ME ? '（你）' : ''}</option>`).join('')}</select></div>
     <div class="fld"><label>参与成员</label><div class="who-pick" id="bw">${living().map(m => `<button type="button" data-m="${m.id}" aria-pressed="true">${av(m.id, 'sm')}${m.name}</button>`).join('')}</div></div>
-    <div class="fld"><label for="bm">分摊方式</label><select id="bm">
+    <div class="fld" id="bmWrap"><label for="bm">分摊方式</label><select id="bm">
       <option value="even">平均分摊</option>
-      <option value="days">按实际居住天数</option></select></div>
+      <option value="days">按登记在住天数</option></select></div>
     <div class="understand"><div class="uh">分摊预览</div><div class="ub" id="bPrev"></div></div>
     ${acts('doBill', '保存')}`);
+  let kindTouched = false;
   const upd = () => {
     const a = parseFloat(document.getElementById('ba').value) || 0;
     const people = [...sheetEl().querySelectorAll('#bw button[aria-pressed="true"]')].map(b => b.dataset.m);
-    const method = document.getElementById('bm').value;
+    /* 类型先按名称猜，用户改过就以用户的为准；按天数只对水电燃气开放 */
+    if (!kindTouched) document.getElementById('bk').value = guessBillKind(document.getElementById('bt').value);
+    const kind = document.getElementById('bk').value;
+    document.getElementById('bkHint').textContent = BILL_KIND_HINT[kind];
+    document.getElementById('bmWrap').hidden = kind !== 'utility';
+    const method = kind === 'utility' ? document.getElementById('bm').value : 'even';
     let lines = '';
     if (method === 'days') {
       const rows = people.map(id => {
@@ -781,8 +859,9 @@ function billSheet() {
     document.getElementById('bPrev').innerHTML = lines || uline('提示', '至少选择一位成员');
   };
   upd();
-  ['ba', 'bm'].forEach(i => document.getElementById(i).addEventListener('input', upd));
+  ['ba', 'bm', 'bt'].forEach(i => document.getElementById(i).addEventListener('input', upd));
   document.getElementById('bm').addEventListener('change', upd);
+  document.getElementById('bk').addEventListener('change', () => { kindTouched = true; upd(); });
   sheetEl().querySelectorAll('#bw button').forEach(b => b.addEventListener('click', () => {
     const on = b.getAttribute('aria-pressed') === 'true';
     if (on && sheetEl().querySelectorAll('#bw button[aria-pressed="true"]').length === 1) return;
@@ -796,7 +875,9 @@ function visitSheet(presetOvernight) {
     <p class="hint">普通到访只需要告知。留宿会对照现在的约定，超过约定不会被禁止，只是先问问大家。</p>
     <div class="fld"><label for="vh">谁的访客</label><select id="vh">${living().map(m =>
       `<option value="${m.id}" ${m.id === ME ? 'selected' : ''}>${m.name}${m.id === ME ? '（你）' : ''}</option>`).join('')}</select></div>
-    <div class="fld"><label for="vg">访客称呼</label><input type="text" id="vg" value="朋友"></div>
+    <div class="fld"><label for="vg">怎么称呼这位访客？</label><input type="text" id="vg" value="朋友" placeholder="例如：女朋友 / 小王 / 同事A">
+      <div class="who-pick" id="vgs" style="margin-top:7px"></div>
+      <div class="srctag">不需要真实姓名，只是为了分清是不是同一个人：同一个称呼就按同一位访客累计</div></div>
     <div class="fld"><label for="vd">日期</label><select id="vd">
       <option>今天</option><option>明天</option><option>后天</option></select></div>
     <div class="fld"><label for="vw">到访时间</label><input type="text" id="vw" value="19:00–22:00"></div>
@@ -807,23 +888,33 @@ function visitSheet(presetOvernight) {
       <input type="number" id="vn" min="1" max="7" value="1" inputmode="numeric"></div>
     <div id="vCheck"></div>
     ${acts('doVisit', '登记')}`);
+  /* 这位成员登记过的访客做成可点的称呼，点一下就复用同一个人 */
+  const chips = () => {
+    const host = document.getElementById('vh').value, cur = document.getElementById('vg').value.trim();
+    document.getElementById('vgs').innerHTML = guestsOf(host).map(g =>
+      `<button type="button" data-g="${g.guest}" aria-pressed="${g.guest === cur}">${g.guest}<small style="color:var(--ink-4);font-weight:400">${g.nights ? ` · 本周 ${g.nights} 晚` : ''}</small></button>`).join('');
+    sheetEl().querySelectorAll('#vgs button').forEach(b => b.addEventListener('click', () => { document.getElementById('vg').value = b.dataset.g; upd(); }));
+  };
   const upd = () => {
     const on = sheetEl().querySelector('#vo button[aria-pressed="true"]').dataset.v === '1';
     const host = document.getElementById('vh').value;
+    const guest = document.getElementById('vg').value.trim() || '朋友';
     const add = on ? (parseInt(document.getElementById('vn').value) || 1) : 0;
     document.getElementById('vnWrap').hidden = !on;
-    const had = nightsOf(host), n = had + add;
+    chips();
+    const had = nightsOf(host, guestKey(host, guest)), n = had + add;
     document.getElementById('vCheck').innerHTML = !on ? `
       <div class="notice">${svg(I.info)}<span>普通到访只需要告知其他室友，不需要征求同意。</span></div>`
       : n <= o.limit ? `
       <div class="notice" style="background:var(--jade-soft);color:var(--jade-ink)">${svg(I.check)}<span>
-        ${mem(host).name} 本周已登记 ${had} 晚，加上这次共 ${n} 晚，仍在约定的每周 ${o.limit} 晚之内。</span></div>`
+        ${mem(host).name} 的「${guest}」本周已登记 ${had} 晚，加上这次共 ${n} 晚，仍在约定的每周 ${o.limit} 晚之内。</span></div>`
       : `<div class="fair"><div class="fh">${svg(I.info)}这次登记会超过现在的约定</div>
-        <p>${mem(host).name} 本周已登记 ${had} 晚，加上这次共 ${n} 晚，超过约定的每周 ${o.limit} 晚。
+        <p>${mem(host).name} 的「${guest}」本周已登记 ${had} 晚，加上这次共 ${n} 晚，超过约定的每周 ${o.limit} 晚。
            这不会被禁止，但建议先征求其他室友的意见。</p></div>`;
   };
   upd();
   document.getElementById('vn').addEventListener('input', upd);
+  document.getElementById('vg').addEventListener('input', upd);
   document.getElementById('vh').addEventListener('change', upd);
   sheetEl().querySelectorAll('#vo button').forEach(b => b.addEventListener('click', () => {
     sheetEl().querySelectorAll('#vo button').forEach(x => x.setAttribute('aria-pressed', 'false'));
@@ -844,7 +935,7 @@ function awaySheet() {
 
 function deferSheet(id) {
   const t = S.tasks.find(x => x.id === id);
-  const cand = living().filter(m => m.id !== ME && statusOf(m.id) === 'home')
+  const cand = living().filter(m => m.id !== ME && statusOf(m.id) === 'in')
     .map(m => ({ m, load: S.tasks.filter(x => x.who === m.id && !x.done).length }))
     .sort((a, b) => a.load - b.load)[0];
   openSheet(`<h3>今天做不了「${t.task}」</h3>
@@ -862,8 +953,9 @@ function deferSheet(id) {
   if (cand) sheetEl().dataset.cand = cand.m.id;
 }
 
-function stewardSheet() {
-  const it = S.issues[0];
+function stewardSheet(id) {
+  /* 只拿公开的问题记录做摘要，"仅自己留存"的不会进摘要 */
+  const it = (id && S.issues.find(x => x.id === id)) || visibleIssues().find(x => x.follow !== 'self');
   const rule = it ? S.rules.find(r => r.id === it.rule) : null;
   openSheet(`<h3>管家协调摘要</h3>
     <p class="hint">这份摘要只描述规则和现状之间的差距，不评价任何人。提交前你可以看到全部内容。</p>

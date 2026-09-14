@@ -84,8 +84,8 @@ button{font:inherit;color:inherit;cursor:pointer;text-align:left}
 .housecard .hn{font-family:var(--f-d);font-weight:600;font-size:14px;margin-top:1px;line-height:1.35}
 .housecard .ho{font-size:11.5px;color:var(--ink-3);margin-top:3px}
 /* 侧栏只放头像，成员状态在首页的状态栏里说，不两处重复 */
-.roster{display:flex;gap:5px;margin-top:9px;align-items:center}
-.roster .rmore{font-size:11px;color:var(--ink-3);margin-left:2px}
+.roster{display:flex;gap:5px;margin-top:9px;align-items:center;flex-wrap:wrap}
+.roster .rmore{font-size:11px;color:var(--ink-3);margin-left:2px;width:100%;line-height:1.4}
 nav{display:flex;flex-direction:column;gap:2px}
 .nv{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:10px;border:0;background:none;width:100%;color:var(--ink-2);font-weight:500;font-size:14.5px}
 .nv svg{width:17px;height:17px;flex:none;opacity:.7}
@@ -978,6 +978,18 @@ button.pill.warm:hover{text-decoration:underline}
   .meout{flex-wrap:wrap} .meout>.btn.pri{width:100%;justify-content:center}
 }
 
+/* 生命周期受限时的说明卡 / 成员小卡 / 费用类型 / 可点的成员 */
+.locked{display:flex;gap:14px;align-items:flex-start;margin-bottom:12px;background:var(--cream);border-color:var(--sand-2)}
+.locked>.ms-i{background:var(--surface);color:var(--ink-3);box-shadow:var(--shadow)}
+.locked b{font-family:var(--f-d);font-size:15px;font-weight:600;display:block}
+.locked p{font-size:13.5px;color:var(--ink-2);line-height:1.6;margin-top:4px}
+.person{cursor:pointer}
+.person:focus-visible{outline:2px solid var(--sage);outline-offset:2px}
+.bchip.kind{background:var(--surface-2);color:var(--ink-3)}
+.melist li .lcgo{margin-left:0;flex:none}
+.melist li .btn{flex:none}
+.who-pick button small{margin-left:2px}
+
 /* ============ 「不好开口」流程里的示例按钮 ============ */
 .bq{border:1px solid var(--line);background:var(--surface-2);border-radius:18px;padding:4px 11px;font-size:12.5px;color:var(--ink-2)}
 .bq:hover{border-color:var(--jade-line);background:var(--jade-soft);color:var(--jade-ink)}
@@ -1296,6 +1308,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--jade);outline-of
         <p>演示用：切换身份可以查看不同角色看到的页面状态，把"请求—回应"整条链走完。正式产品里每个人只有自己的账号。</p>
         <div class="idlist" id="idList"></div>
         <button data-act="syncPlatform">模拟租房中介推送一次变更</button>
+        <button data-act="activateMember" id="demoLin">模拟租约生效：新室友正式入住</button>
         <button data-act="reset">重置演示数据</button>
       </div>
     </div>
