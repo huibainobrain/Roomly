@@ -832,6 +832,152 @@ button.pill.warm:hover{text-decoration:underline}
   .tend i{width:40px;flex:none}
 }
 
+/* ============================================================
+   我的页
+   身份卡（登记离家计划 = 临时外出）→ 我的生活偏好（个人，不是共同约定）→ 我的空间 | 我的物品 + 我的责任
+   → 我的账单 | 与我相关的房屋服务 → 搬出与退租（准备清单，退租由机构确认）
+   ============================================================ */
+.mehead{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.mehead .phead{margin-bottom:14px}
+.mehead .ph{width:320px;height:96px;flex:none;border-radius:16px;min-height:0;background:var(--cream);border:1px dashed var(--sand-2)}
+.mehead .ph::after{display:none}
+.mehead .ph img{object-fit:contain;object-position:right center}
+
+.meid{display:flex;align-items:center;gap:16px;padding:18px 22px;border-radius:22px;margin-bottom:14px}
+.meid .av.xxl{width:64px;height:64px;font-size:21px}
+.meid-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.meid-t>b{font-family:var(--f-d);font-size:19px;font-weight:600;line-height:1.2}
+.meid-st{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;color:var(--ink-2)}
+.meid-meta{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-3);flex-wrap:wrap}
+.meid-meta svg{width:13px;height:13px;color:var(--ink-4);flex:none}
+.meid-meta i{font-style:normal;color:var(--ink-4)}
+.meid-act{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex:none}
+.meid-act .btn.pri{background:var(--sage);border-color:var(--sage);border-radius:12px;padding:9px 16px}
+.meid-act .btn.pri:hover{background:var(--sage-deep);border-color:var(--sage-deep)}
+.meid-act small{font-size:12px;color:var(--ink-3)}
+
+/* 偏好：个人的 */
+.mepref{padding:16px 20px 14px;border-radius:22px;margin-bottom:16px}
+.mp-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.ms-i{width:34px;height:34px;border-radius:12px;background:var(--sage-soft);color:var(--sage-deep);display:grid;place-items:center;flex:none}
+.ms-i svg{width:17px;height:17px}
+.mp-ht{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;flex:1;min-width:0}
+.mp-ht b{font-family:var(--f-d);font-size:16px;font-weight:600}
+.mp-ht span{font-size:12.5px;color:var(--ink-3)}
+.mp-ht em{font-style:normal;color:var(--sage-deep);font-weight:600}
+.mp-hint{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-3)}
+.mp-hint svg{width:13px;height:13px;flex:none}
+.mp-h .btn{border-radius:12px;border-color:var(--sage-line);color:var(--sage-deep)}
+.mp-h .btn:hover{background:var(--sage-soft)}
+.mp-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.mp-grid.all{margin-top:10px;grid-template-columns:repeat(4,1fr)}
+.mp-tile{display:flex;align-items:center;gap:10px;background:var(--cream);border-radius:14px;padding:11px 12px;min-width:0}
+.mp-ti{width:34px;height:34px;border-radius:11px;background:var(--surface);display:grid;place-items:center;color:var(--sage-deep);flex:none;box-shadow:var(--shadow)}
+.mp-ti svg{width:16px;height:16px}
+.mp-tile div{min-width:0}
+.mp-tile span{display:block;font-size:12px;color:var(--ink-3)}
+.mp-tile b{display:block;font-family:var(--f-d);font-size:14px;font-weight:600;line-height:1.35}
+.mp-more{display:inline-flex;align-items:center;justify-content:center;gap:4px;background:var(--cream);border:1px dashed var(--sand-2);border-radius:14px;font-size:13px;font-weight:600;color:var(--sage-deep);padding:11px 12px}
+.mp-more svg{width:14px;height:14px}
+.mp-more:hover{background:var(--sage-soft)}
+.mp-diff{display:flex;align-items:center;gap:8px;margin-top:12px;background:var(--peach-soft);border-radius:14px;padding:10px 13px;font-size:12.5px;color:var(--ink-2);line-height:1.5;flex-wrap:wrap}
+.mp-diff>svg{width:15px;height:15px;color:var(--peach);flex:none}
+.mp-diff span{flex:1;min-width:0}
+.mp-diff .lcgo{margin-left:0}
+.mp-src{display:flex;align-items:center;gap:5px;margin-top:10px;font-size:11.5px;color:var(--ink-4)}
+.mp-src svg{width:11px;height:11px}
+
+/* 双栏 */
+.megrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;align-items:start}
+.mecol{display:flex;flex-direction:column;gap:16px;min-width:0}
+.mesec{padding:16px 18px;border-radius:22px;min-width:0}
+.ms-h{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.ms-h b{font-family:var(--f-d);font-size:16px;font-weight:600;flex:1;min-width:0}
+.ms-h .btn{border-radius:10px}
+.ms-h .lcgo{margin-left:0}
+.ms-sub{font-size:12.5px;color:var(--ink-3)}
+.melist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.melist li{display:flex;align-items:center;gap:11px;background:var(--cream);border-radius:14px;padding:10px 12px}
+.melist li.dim{opacity:.6}
+.ml-i{width:36px;height:36px;border-radius:12px;background:var(--surface);color:var(--ink-2);display:grid;place-items:center;flex:none;box-shadow:var(--shadow)}
+.ml-i svg{width:17px;height:17px}
+.melist li>div{flex:1;min-width:0}
+.melist li b{display:block;font-family:var(--f-d);font-size:14px;font-weight:600;line-height:1.35}
+.melist li>div>span{display:block;font-size:12px;color:var(--ink-3);margin-top:1px}
+.melist li .pill{flex:none}
+.melist.tasks .btn{flex:none;background:var(--sage);border-color:var(--sage);border-radius:10px}
+.melist.tasks .btn:hover{background:var(--sage-deep);border-color:var(--sage-deep)}
+
+/* 物品：缩略图位 + 管理为主、删除为次 */
+.things{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.thing{display:flex;align-items:center;gap:12px;background:var(--cream);border-radius:16px;padding:10px 12px}
+.thing .thumb{width:64px;height:64px;flex:none;border-radius:12px;min-height:0;background:var(--surface);border:1px dashed var(--sand-2)}
+.thing .thumb::after{display:none}
+.thing .thumb img{object-fit:contain;padding:4px}
+.thing .thumb figcaption{padding:0;color:var(--ink-4);display:grid;place-items:center}
+.thing .thumb figcaption svg{width:20px;height:20px}
+.th-t{flex:1;min-width:0}
+.th-t b{display:flex;align-items:center;gap:7px;font-family:var(--f-d);font-size:14.5px;font-weight:600;flex-wrap:wrap}
+.th-t span{display:block;font-size:12.5px;color:var(--ink-2);margin-top:2px}
+.th-t em{display:block;font-style:normal;font-size:11.5px;color:var(--ink-4);margin-top:2px}
+.th-acts{display:flex;gap:6px;flex:none}
+.th-acts .btn{border-radius:10px;border-color:var(--sage-line);color:var(--sage-deep)}
+.th-acts .btn:hover{background:var(--sage-soft)}
+.th-acts .btn.ghost{border-color:transparent;color:var(--ink-3);background:none}
+.th-acts .btn.ghost:hover{background:var(--rose-soft);color:var(--rose)}
+
+/* 账单摘要 / 与我相关的服务 */
+.mebill{display:flex;align-items:center;gap:14px;background:var(--cream);border-radius:16px;padding:14px 16px}
+.mebill>div{flex:1;min-width:0}
+.mebill b{display:block;font-family:var(--f-d);font-size:15px;font-weight:600}
+.mebill>div>span{display:block;font-size:12.5px;color:var(--ink-3);margin-top:2px}
+.mebill em{font-style:normal;font-family:var(--f-d);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.mebill .btn{border-radius:12px}
+.mesvc{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.svc{background:var(--cream);border-radius:16px;padding:12px 12px 11px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.svc-i{width:32px;height:32px;border-radius:11px;background:var(--surface);color:var(--sage-deep);display:grid;place-items:center;box-shadow:var(--shadow);margin-bottom:6px}
+.svc-i svg{width:16px;height:16px}
+.svc b{font-family:var(--f-d);font-size:13.5px;font-weight:600;line-height:1.3}
+.svc span{font-size:12.5px;color:var(--ink-2)}
+.svc span.warm{color:var(--peach);font-weight:600}
+.svc em{font-style:normal;font-size:11.5px;color:var(--ink-4)}
+
+/* 搬出与退租 */
+.meout{display:flex;align-items:center;gap:18px;padding:18px 22px;border-radius:22px;margin-bottom:8px;background:linear-gradient(120deg,var(--cream),var(--surface) 60%)}
+.mo-i{width:56px;height:56px;border-radius:18px;background:var(--peach-soft);color:var(--peach);display:grid;place-items:center;flex:none}
+.mo-i svg{width:26px;height:26px}
+.mo-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:9px}
+.mo-h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.mo-h b{font-family:var(--f-d);font-size:16px;font-weight:600}
+.mo-h span{font-size:12.5px;color:var(--ink-3)}
+.mo-chips{display:flex;flex-wrap:wrap;gap:6px}
+.mo-chips span{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--ink-2);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:5px 10px}
+.mo-chips span svg{width:13px;height:13px;color:var(--ink-3)}
+.mo-chips span.more{color:var(--ink-4)}
+.mo-note{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-3)}
+.mo-note svg{width:13px;height:13px;flex:none}
+.meout>.btn.pri{background:var(--sage);border-color:var(--sage);border-radius:12px;padding:10px 18px;flex:none}
+.meout>.btn.pri:hover{background:var(--sage-deep);border-color:var(--sage-deep)}
+.chk.final .box{border-style:dashed;color:var(--ink-4)}
+.chk.final .box svg{opacity:1}
+.chk.final .ct{color:var(--ink-2)}
+
+@media (max-width:1080px){
+  .mp-grid,.mp-grid.all{grid-template-columns:repeat(3,1fr)}
+  .mesvc{grid-template-columns:1fr 1fr}
+}
+@media (max-width:820px){ .megrid{grid-template-columns:1fr} }
+@media (max-width:560px){
+  .mehead .ph{display:none}
+  .meid{flex-wrap:wrap} .meid-act{width:100%;align-items:stretch} .meid-act .btn{justify-content:center} .meid-act small{text-align:center}
+  .mp-grid,.mp-grid.all{grid-template-columns:1fr 1fr}
+  .mp-h .btn{width:100%;justify-content:center}
+  .thing{flex-wrap:wrap} .th-acts{width:100%;justify-content:flex-end}
+  .mesvc{grid-template-columns:1fr}
+  .mebill{flex-wrap:wrap} .mebill .btn{width:100%;justify-content:center}
+  .meout{flex-wrap:wrap} .meout>.btn.pri{width:100%;justify-content:center}
+}
+
 /* ============ 「不好开口」流程里的示例按钮 ============ */
 .bq{border:1px solid var(--line);background:var(--surface-2);border-radius:18px;padding:4px 11px;font-size:12.5px;color:var(--ink-2)}
 .bq:hover{border-color:var(--jade-line);background:var(--jade-soft);color:var(--jade-ink)}
@@ -1147,7 +1293,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--jade);outline-of
     <div class="railfoot">
       <button class="idbtn" data-act="demoPanel">体验身份 <b id="meName"></b> <span aria-hidden="true">▾</span></button>
       <div class="demopanel" id="demoPanel" hidden>
-        <p>切换身份可以看到发给对方的请求，把"请求—回应"整条链走完。</p>
+        <p>演示用：切换身份可以查看不同角色看到的页面状态，把"请求—回应"整条链走完。正式产品里每个人只有自己的账号。</p>
         <div class="idlist" id="idList"></div>
         <button data-act="syncPlatform">模拟相寓推送一次变更</button>
         <button data-act="reset">重置演示数据</button>

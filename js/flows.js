@@ -586,6 +586,38 @@ function thingSheet() {
   }));
 }
 
+/* 管理自己的物品：共享方式、说明、位置都能改；删除放在页面上做次要动作 */
+function manageThingSheet(id) {
+  const x = S.supplies.find(y => y.id === id);
+  const w = x.kind === 'private' ? 'private' : (x.rule && /问/.test(x.rule) ? 'ask' : 'free');
+  openSheet(`<h3>管理「${x.name}」</h3>
+    <p class="hint">改的是这件东西在家里的使用方式，室友在「可借的东西」里看到的会同步更新。</p>
+    <div class="fld"><label for="mt-n">物品名称</label><input type="text" id="mt-n" value="${x.name}"></div>
+    <div class="fld"><label>共享方式</label><div class="who-pick" id="mt-w">
+      <button type="button" data-v="private" aria-pressed="${w === 'private'}">不共享（私人）</button>
+      <button type="button" data-v="free" aria-pressed="${w === 'free'}">可以直接使用</button>
+      <button type="button" data-v="ask" aria-pressed="${w === 'ask'}">使用前问我</button></div></div>
+    <div class="fld"><label for="mt-r">使用说明（可借时显示给室友）</label><input type="text" id="mt-r" value="${x.rule || ''}" placeholder="例如：用后清洗放回"></div>
+    <div class="fld"><label for="mt-z">放在哪（可留空）</label><input type="text" id="mt-z" value="${x.zone || ''}" placeholder="例如：冰箱上层"></div>
+    ${acts('doManageThing', '保存')}`);
+  sheetEl().dataset.sid = id;
+  sheetEl().querySelectorAll('#mt-w button').forEach(b => b.addEventListener('click', () => {
+    sheetEl().querySelectorAll('#mt-w button').forEach(y => y.setAttribute('aria-pressed', 'false'));
+    b.setAttribute('aria-pressed', 'true');
+  }));
+}
+
+/* 改完偏好发现和家里现在的约定不一样：只提示，不改约定 */
+function prefDiffSheet(diff) {
+  openSheet(`<h3>偏好已更新</h3>
+    <p class="hint">你的偏好和当前共同约定有 ${diff.length} 项不同。约定不会因此自动改变——要不要去共识页和大家聊聊？</p>
+    <div class="card rows" style="margin:12px 0 14px">${diff.map(d => `
+      <div class="row"><div class="main"><div class="ttl">${d.label}</div>
+        <div class="meta">你：${d.mine} · ${d.house.from === 'rule' ? '共同约定' : '家里现在'}：${d.house.v}</div></div></div>`).join('')}</div>
+    <div class="acts"><button class="btn" data-act="close">先这样</button>
+      <button class="btn pri" data-act="go" data-tab="talk">去共识页聊聊</button></div>`);
+}
+
 /* ============================================================
    逆向操作：记错了、改主意了、现实变了
    ============================================================ */
@@ -800,8 +832,8 @@ function visitSheet(presetOvernight) {
 }
 
 function awaySheet() {
-  openSheet(`<h3>登记离家</h3>
-    <p class="hint">登记之后，值日、公共采购和水电分摊都会跟着调整。</p>
+  openSheet(`<h3>登记离家计划</h3>
+    <p class="hint">临时外出、请假不在家用这个。登记之后，值日、公共采购和水电分摊都会跟着调整；正式搬出请走「搬出与退租」。</p>
     <div class="fld"><label for="af">开始</label><input type="text" id="af" value="9月16日"></div>
     <div class="fld"><label for="at">结束</label><input type="text" id="at" value="9月20日"></div>
     <div class="fld"><label for="ad">天数</label><input type="number" id="ad" value="5" min="1"></div>

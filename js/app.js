@@ -9,9 +9,8 @@ const stamp = () => `今天 ${NOW}`;
 const mySrc = () => ({ via:'member', by:ME, at:stamp() });
 
 function render() {
-  /* 首页用更宽的版心，其他页面保持原样 */
-  /* 首页、账单页和生活 / 共识两页的总览用宽版心，子页面和「我的」保持 880px */
-  document.querySelector('.wrap').classList.toggle('wide', S.tab === 'home' || S.tab === 'bill' || ((S.tab === 'life' || S.tab === 'talk') && !S.sub));
+  /* 各页总览用宽版心，子页面保持 880px */
+  document.querySelector('.wrap').classList.toggle('wide', S.tab === 'home' || S.tab === 'bill' || ((S.tab === 'life' || S.tab === 'talk' || S.tab === 'me') && !S.sub));
   document.getElementById('view').innerHTML = VIEWS[S.tab]();
 
   document.getElementById('nav').innerHTML = TABS.map(t => {
@@ -73,7 +72,7 @@ document.addEventListener('click', e => {
   switch (act) {
 
   /* ---- 导航 ---- */
-  case 'go': goTo(el.dataset.tab, el.dataset.sub); break;
+  case 'go': closeSheet(); goTo(el.dataset.tab, el.dataset.sub); break;
   case 'close': closeSheet(); break;
   case 'seg': S.segment = el.dataset.k; render(); break;
   case 'togglePrefs': S.showAllPrefs = !S.showAllPrefs; render(); break;
@@ -358,6 +357,23 @@ document.addEventListener('click', e => {
     break;
   }
   case 'delThing': S.supplies = S.supplies.filter(x => x.id !== id); render(); toast('已删除'); break;
+  /* 管理自己的物品：改共享方式、说明、位置；删除只是次要动作 */
+  case 'manageThing': manageThingSheet(id); break;
+  case 'doManageThing': {
+    const x = S.supplies.find(y => y.id === sheetEl().dataset.sid);
+    const name = document.getElementById('mt-n').value.trim();
+    if (!name) { toast('物品名称不能为空'); return; }
+    const w = sheetEl().querySelector('#mt-w button[aria-pressed="true"]').dataset.v;
+    const zone = document.getElementById('mt-z').value.trim();
+    const rule = document.getElementById('mt-r').value.trim();
+    x.name = name;
+    x.kind = w === 'private' ? 'private' : 'lend';
+    x.zone = zone || (x.kind === 'private' ? '未标注位置' : undefined);
+    x.rule = x.kind === 'lend' ? (rule || (w === 'free' ? '可直接使用，用后清洗放回' : '使用前问一声')) : undefined;
+    x.src = { ...(x.src || {}), via:'member', by:x.src && x.src.by || ME, at:x.src && x.src.at || stamp(), edited:stamp() };
+    closeSheet(); render(); toast(`已更新「${x.name}」：${x.kind === 'lend' ? '可借 · ' + x.rule : '私人物品'}`);
+    break;
+  }
 
   /* ---- 公共空间 ---- */
   case 'confirmZones': {
@@ -599,15 +615,25 @@ document.addEventListener('click', e => {
 
   /* ---- 入住共识问卷 ---- */
   case 'startQuiz': S.quiz = { step:0, answers:{} }; quizSheet(); break;
+  /* 从「我的」进来是改自己的偏好：带着现在的答案进问卷，只改想改的；改偏好 ≠ 改约定 */
+  case 'editPrefs': S.quiz = { step:0, answers:{ ...mem(ME).prefs }, from:'me' }; quizSheet(); break;
   case 'quizPick': S.quiz.answers[QUIZ[S.quiz.step].k] = el.dataset.v; quizSheet(); break;
   case 'quizBack': S.quiz.step--; quizSheet(); break;
   case 'quizNext':
     if (S.quiz.step === QUIZ.length - 1) {
-      S.myPrefs = { ...S.myPrefs, ...S.quiz.answers };
+      S.myPrefs[ME] = { ...(S.myPrefs[ME] || {}), ...S.quiz.answers };
       S.onboardDone[ME] = TODAY;
       logFeed(ME, '更新了自己的生活偏好');
-      closeSheet(); goTo('talk', 'onboard');
-      toast('已更新。已经形成约定的部分不会自动改变，需要重新讨论。');
+      closeSheet();
+      if (S.quiz.from === 'me') {
+        goTo('me');
+        const diff = myPrefDiff();
+        if (diff.length) prefDiffSheet(diff);
+        else toast('已更新你的偏好。和现在的共同约定没有冲突。');
+      } else {
+        goTo('talk', 'onboard');
+        toast('已更新。已经形成约定的部分不会自动改变，需要重新讨论。');
+      }
     } else { S.quiz.step++; quizSheet(); }
     break;
 
@@ -835,11 +861,14 @@ function resolveTopic(t) {
     target.desc = t.proposal;
     target.since = TODAY;
     target.by = living().map(m => m.id);
+    /* 约定文字变了，对应的偏好选项值也跟着更新；对不上的就不再拿来和个人偏好比对 */
+    if (target.prefKey) { const pv = prefValFromText(target.prefKey, target.title + ' ' + t.proposal); if (pv) target.prefVal = pv; else delete target.prefVal; }
     logFeed('sys', `大家就「${t.title}」达成了新的约定：「${target.title}」更新到第 ${target.history.length + 1} 版`);
     return;
   }
   S.rules.push({ id:'r' + Date.now(), title:t.title.replace(/（.*?）/, ''), cat:TOPIC_CAT[t.prefKey] || '共识',
-    desc:t.proposal, by:living().map(m => m.id), since:TODAY, prefKey:t.prefKey, history:[] });
+    desc:t.proposal, by:living().map(m => m.id), since:TODAY, prefKey:t.prefKey, history:[],
+    prefVal: t.prefKey ? prefValFromText(t.prefKey, t.proposal) : undefined });
   logFeed('sys', `大家就「${t.title}」达成了新的约定`);
 }
 

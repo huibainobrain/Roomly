@@ -83,11 +83,11 @@ const KEY_PREFS = ['quiet', 'overnight', 'kitchen', 'temp'];
 
 /* 演示环境可以切换身份，这样"请求—回应"这类双方流程能被完整走通 */
 let ME = 'yiming';
+/* 每个人后来改过的偏好按人存在 S.myPrefs[id] 里，盖在入住时填的那份上面 */
 const mem = id => {
   const base = MEMBERS.find(m => m.id === id) || { id, name:id, short:'?', c:'#8A938D', prefs:{} };
-  if (id === ME && typeof S !== 'undefined' && S && S.myPrefs)
-    return { ...base, prefs: { ...base.prefs, ...S.myPrefs } };
-  return base;
+  const edits = typeof S !== 'undefined' && S && S.myPrefs && S.myPrefs[id];
+  return edits ? { ...base, prefs: { ...base.prefs, ...edits } } : base;
 };
 const living = () => MEMBERS.filter(m => !m.incoming && !S.movedOut.includes(m.id)).map(m => mem(m.id));
 
@@ -122,7 +122,11 @@ const I = {
   tool:'<path d="M14.5 6.5a3.5 3.5 0 0 0 4.6 4.6l-8 8a2.3 2.3 0 0 1-3.2-3.2l8-8Z"/><path d="M6 6l3 3"/>',
   lock:'<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7.6a3.5 3.5 0 0 1 7 0v2.9"/>',
   phone:'<path d="M6 3h4l2 5-2.5 1.5a12 12 0 0 0 5 5L16 12l5 2v4a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4 5.2 2 2 0 0 1 6 3Z"/>',
-  note:'<path d="M6 3h9l4 4v14H6V3Z"/><path d="M15 3v4h4"/><path d="M9.5 12h5M9.5 16h5"/>'
+  note:'<path d="M6 3h9l4 4v14H6V3Z"/><path d="M15 3v4h4"/><path d="M9.5 12h5M9.5 16h5"/>',
+  edit:'<path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3Z"/><path d="m13.5 6.5 3 3"/>',
+  truck:'<path d="M3 7h10v9H3z"/><path d="M13 10h4l3 3v3h-7"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/>',
+  key:'<circle cx="8" cy="14" r="4"/><path d="m11 11 8-8"/><path d="m16 6 2 2M19 3l2 2"/>',
+  broom:'<path d="M14 3 8 9"/><path d="M8 9c-3 0-4.5 2-4.5 5.5V21h9v-6.5C12.5 11 11 9 8 9Z"/><path d="M3.5 17h9"/>'
 };
 const svg = (p, w) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w||1.8}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
 
@@ -196,11 +200,11 @@ const SEED = {
       src:{ via:'member', by:'alex', at:'9月9日 21:30' } },
     { id:'s5', kind:'public', mode:'state', name:'洗衣液', state:'充足',
       src:{ via:'member', by:'yiming', at:'9月1日 10:15' } },
-    { id:'s6', kind:'lend', name:'空气炸锅', owner:'yiming', rule:'可直接使用，用后清洗放回',
+    { id:'s6', kind:'lend', name:'空气炸锅', owner:'yiming', rule:'可直接使用，用后清洗放回', photo:'img/mine-item-airfryer.png',
       src:{ via:'member', by:'yiming', at:'6月3日' } },
     { id:'s7', kind:'lend', name:'工具箱',   owner:'alex',   rule:'使用前问一声',
       src:{ via:'member', by:'alex', at:'5月2日' } },
-    { id:'s8', kind:'private', name:'个人食材与调料', owner:'yiming', zone:'冰箱上层',
+    { id:'s8', kind:'private', name:'个人食材与调料', owner:'yiming', zone:'冰箱上层', photo:'img/mine-item-seasoning.png',
       src:{ via:'member', by:'yiming', at:'6月3日' } },
     { id:'s9', kind:'private', name:'私人洗护用品',   owner:'alex',   zone:'卫生间 B 层',
       src:{ via:'member', by:'alex', at:'5月2日' } }
@@ -277,10 +281,11 @@ const SEED = {
 
   rules: [
     { id:'r1', title:'23:30 后保持安静',        cat:'噪音', desc:'外放改用耳机，洗衣、搬动家具尽量避开这个时间。', by:['yiming','alex','tom'], since:'6月1日' },
-    { id:'r2', title:'同一访客每周最多留宿 2 晚', cat:'访客', desc:'超过这个次数，提前征求其他室友意见。',        by:['yiming','alex','tom'], since:'6月1日', prefKey:'overnight' },
-    { id:'r3', title:'常用公共用品统一采购 AA',   cat:'物品', desc:'厕纸、垃圾袋、洗洁精等由当次发现缺货的人补充，费用三人平摊。', by:['yiming','alex','tom'], since:'6月1日', prefKey:'supply' },
-    { id:'r4', title:'厨房使用后当天恢复',        cat:'清洁', desc:'台面无明显油污，厨余当天处理，锅具当天清洗。',   by:['yiming','alex','tom'], since:'8月20日', prefKey:'kitchen' },
-    { id:'r5', title:'公共区域禁止吸烟',          cat:'其他', desc:'包括客厅、厨房、卫生间与阳台。',              by:['yiming','alex','tom'], since:'6月1日', prefKey:'smoke' },
+    /* prefVal：这条约定对应到入住共识选项里的哪个值，用来比对"我的偏好"和"共同约定" */
+    { id:'r2', title:'同一访客每周最多留宿 2 晚', cat:'访客', desc:'超过这个次数，提前征求其他室友意见。',        by:['yiming','alex','tom'], since:'6月1日', prefKey:'overnight', prefVal:'每周 ≤2 晚' },
+    { id:'r3', title:'常用公共用品统一采购 AA',   cat:'物品', desc:'厕纸、垃圾袋、洗洁精等由当次发现缺货的人补充，费用三人平摊。', by:['yiming','alex','tom'], since:'6月1日', prefKey:'supply', prefVal:'统一采购 AA' },
+    { id:'r4', title:'厨房使用后当天恢复',        cat:'清洁', desc:'台面无明显油污，厨余当天处理，锅具当天清洗。',   by:['yiming','alex','tom'], since:'8月20日', prefKey:'kitchen', prefVal:'台面擦净，锅具当天洗' },
+    { id:'r5', title:'公共区域禁止吸烟',          cat:'其他', desc:'包括客厅、厨房、卫生间与阳台。',              by:['yiming','alex','tom'], since:'6月1日', prefKey:'smoke', prefVal:'家里都不吸' },
     { id:'r6', title:'访客留宿提前告知',          cat:'访客', desc:'至少提前一天在家里登记一下，方便大家安排。',   by:['yiming','alex','tom'], since:'6月1日' }
   ],
 
@@ -327,6 +332,13 @@ Object.keys(SEED).forEach(k => { if (S[k] === undefined) S[k] = structuredClone(
 /* 访客头像是后加的展示字段，老存档里同一条登记按 id 补上 */
 S.visits.forEach(v => { const seed = SEED.visits.find(x => x.id === v.id);
   if (seed && seed.guestPhoto && !v.guestPhoto) v.guestPhoto = seed.guestPhoto; });
+S.supplies.forEach(x => { const seed = SEED.supplies.find(y => y.id === x.id);
+  if (seed && seed.photo && !x.photo) x.photo = seed.photo; });
+/* 更早的存档把偏好修改存成一份扁平对象，现在按人存 */
+if (S.myPrefs && Object.keys(S.myPrefs).some(k => PREF_KEYS.some(p => p.k === k))) S.myPrefs = { [S.me || 'yiming']: S.myPrefs };
+/* 约定对应的偏好值是后加的字段，老存档按 id 补上 */
+S.rules.forEach(r => { const seed = SEED.rules.find(x => x.id === r.id);
+  if (seed && seed.prefVal && r.prefVal === undefined && !(r.history && r.history.length)) r.prefVal = seed.prefVal; });
 /* 演示约定：公平分摊建议是账单页的展示重点，每次重新打开页面都恢复到"待决定"。
    采用 / 维持两个动作只会生成一笔以 utilityForecast.title 命名的账单和一条动态，一并撤掉。 */
 {
@@ -488,6 +500,27 @@ function overnightRule() {
   const actual = Math.max(0, ...living().map(x => nightsOf(x.id)));
   const who = living().find(x => nightsOf(x.id) === actual);
   return { rule, limit, actual, who: who && who.id, exceeded: actual > limit };
+}
+
+/* 某一项上"家里现在的做法"：有对应约定就按约定对应的选项值，没有就按在住成员的多数 */
+function houseValOf(k) {
+  const rule = S.rules.find(r => r.prefKey === k);
+  if (rule && rule.prefVal) return { v:rule.prefVal, from:'rule', rule };
+  const count = {};
+  living().forEach(m => { const v = m.prefs[k]; if (v) count[v] = (count[v] || 0) + 1; });
+  const v = Object.keys(count).sort((a, b) => count[b] - count[a])[0];
+  return v ? { v, from:'house', rule } : null;
+}
+/* 我的偏好和家里现在的做法 / 共同约定不同的地方。改偏好不改约定，这里只用来提醒去共识页聊 */
+const myPrefDiff = (id = ME) => PREF_KEYS.filter(p => p.cmp && p.kind === 'rule')
+  .map(p => ({ ...p, mine: mem(id).prefs[p.k], house: houseValOf(p.k) }))
+  .filter(x => x.mine && x.house && x.mine !== x.house.v);
+/* 约定文字改了之后，尽量把它对应回一个选项值；对不上就不再拿来比对 */
+function prefValFromText(k, text) {
+  if (k === 'overnight') { const m = text.match(/(\d+)\s*晚/); return m ? `每周 ≤${m[1]} 晚` : (/不限/.test(text) ? '不限' : undefined); }
+  if (k === 'temp')      { const m = text.match(/(\d+)\s*°C/); return m ? `${m[1]}°C` : undefined; }
+  if (k === 'quiet')     { const m = text.match(/(\d{1,2}:\d{2})/); return m ? m[1] : undefined; }
+  return undefined;
 }
 
 function consensusResult() {

@@ -1206,117 +1206,164 @@ const TALK_VIEWS = { onboard:vOnboard, lin:vLin, issue:vIssue, topic:vTopic };
 /* ============================================================
    我的
    ============================================================ */
+/* 我的：我是谁 → 我怎么生活（个人偏好，不是共同约定）→ 我的空间 / 物品 → 我的责任 / 账单 →
+   与我相关的房屋服务 → 搬出与退租。临时离家（登记离家计划）和正式搬出是两类事，分别放在顶部和底部。
+   所有内容都来自现有数据：成员 / 偏好 / 分区 / 物品 / 任务 / 账单 / 报修，页面不写死。 */
+const PREF_TILE_ICON = { quiet:I.clock, visitor:I.guest, overnight:I.guest, kitchen:I.chore, supply:I.box, temp:I.home, smoke:I.shield,
+  social:I.life, sleep:I.clock, conflict:I.talk, cook:I.chore, pet:I.life };
+const MOVE_STEP_ICON = { m1:I.bill, m2:I.box, m3:I.scale, m4:I.broom, m5:I.key, m6:I.chore };
+
 function vMe() {
   if (S.sub === 'moveout') return vMoveout();
-  const me = mem(ME);
-  const st = statusOf(ME);
-  const a = awayOf(ME);
+  const me = mem(ME), st = statusOf(ME), a = awayOf(ME);
+  const org = HOUSE.org.split(' · ')[0];
   const myZones = [];
-  S.spaces.forEach(sp => sp.zones.forEach(z => { if (z.o === ME) myZones.push(`${sp.name} ${z.n}`); }));
+  S.spaces.forEach(sp => sp.zones.forEach(z => { if (z.o === ME) myZones.push({ sp, z }); }));
   const myThings = S.supplies.filter(s => s.owner === ME);
+  const tasks = S.tasks.filter(t => t.who === ME);
+  const myRepairs = S.repairs.filter(r => r.by === ME);
+  const diff = myPrefDiff();
+  const due = myDue();
+
+  /* 偏好小卡：只展示"我怎么想"，家里现在怎么约定的去共识页看 */
+  const tile = k => { const p = PREF_KEYS.find(x => x.k === k);
+    return `<div class="mp-tile"><span class="mp-ti">${svg(PREF_TILE_ICON[k] || I.check)}</span><div><span>${p.label}</span><b>${me.prefs[k] || '还没填'}</b></div></div>`; };
+
+  const thingRow = s => `<li class="thing">
+    <figure class="ph thumb"><img src="${s.photo || ''}" alt="" onload="this.parentNode.classList.add('ok')" onerror="this.remove()"><figcaption>${svg(I.box)}</figcaption></figure>
+    <div class="th-t"><b>${s.name}<span class="pill ${s.kind === 'lend' ? 'info' : 'plain'}">${s.kind === 'lend' ? '可借' : '私人'}</span></b>
+      <span>${s.kind === 'lend' ? s.rule : (s.zone || '未标注位置')}</span>
+      <em>${me.name} · ${s.src && s.src.at ? s.src.at + ' ' : ''}添加${s.src && s.src.edited ? ` · ${s.src.edited} 改过` : ''}</em></div>
+    <div class="th-acts"><button class="btn sm" data-act="manageThing" data-id="${s.id}">管理</button><button class="btn sm ghost" data-act="delThing" data-id="${s.id}">删除</button></div>
+  </li>`;
+
+  const steps = defaultMoveout().items;
 
   return `
-    ${head('我的', '你在这个家里的状态、边界和责任。')}
+  <div class="mehead">
+    <div class="phead"><h1>我的</h1><p>你在这个家里的状态、边界与责任。</p></div>
+    ${imgSlot('img/mine-header-decor.png', '待补页面右上装饰图<br>绿植 · 手写字')}
+  </div>
 
-    <div class="card pad" style="margin-bottom:12px">
-      <div style="display:flex;gap:13px;align-items:center">${av(ME, 'xl')}
-        <div style="flex:1"><div style="font-family:var(--f-d);font-weight:600;font-size:18px">${me.name}</div>
-          <div style="font-size:13px;color:var(--ink-2);display:flex;align-items:center;gap:6px;margin-top:2px">
-            <i class="sdot ${st}"></i>${STATUS_TEXT[st]} · ${me.room}</div>
-          ${srcTag(me.lease)}</div>
-        <button class="btn sm" data-act="${a ? 'cancelAwayMe' : 'newAway'}">${a ? '我提前回来了' : '登记离家'}</button>
+  <section class="card meid">
+    ${av(ME, 'xxl')}
+    <div class="meid-t">
+      <b>${me.name}</b>
+      <span class="meid-st"><i class="sdot ${st}"></i>${STATUS_TEXT[st]} · ${me.room}</span>
+      <span class="meid-meta">${svg(I.info)}<span>${me.joined} 入住</span><i>|</i><span>租约信息来自${org}</span></span>
+    </div>
+    <div class="meid-act">
+      <button class="btn pri" data-act="${a ? 'cancelAwayMe' : 'newAway'}">${svg(I.away)}${a ? '我提前回来了' : '登记离家计划'}</button>
+      <small>${a ? `${a.from} — ${a.to} 登记离家中` : '临时外出 / 请假不在家'}</small>
+    </div>
+  </section>
+
+  <section class="card mepref">
+    <div class="mp-h">
+      <span class="ms-i">${svg(I.me)}</span>
+      <div class="mp-ht"><b>我的生活偏好</b><span>这些是你的<em>个人偏好</em>，不会自动修改共同约定。</span></div>
+      <span class="mp-hint">${svg(I.info)}如果你的偏好与当前共同约定不同，系统会提醒你发起讨论。</span>
+      <button class="btn" data-act="editPrefs">${svg(I.edit)}修改我的偏好</button>
+    </div>
+    <div class="mp-grid">
+      ${KEY_PREFS.map(tile).join('')}
+      <button class="mp-more" data-act="togglePrefs">${S.showAllPrefs ? '收起' : `查看全部 ${PREF_KEYS.length} 项`}${svg(S.showAllPrefs ? I.back : I.arrow)}</button>
+    </div>
+    ${S.showAllPrefs ? `<div class="mp-grid all">${PREF_KEYS.filter(p => !KEY_PREFS.includes(p.k)).map(p => tile(p.k)).join('')}</div>` : ''}
+    ${diff.length ? `<div class="mp-diff">${svg(I.talk)}<span>你的偏好和当前共同约定有 ${diff.length} 项不同：${diff.map(d => `${d.label}（你 ${d.mine} · ${d.house.from === 'rule' ? '约定' : '家里'} ${d.house.v}）`).join('、')}。约定不会自动改变。</span>
+      <button class="lcgo" data-act="go" data-tab="talk">去共识页聊聊${svg(I.chev)}</button></div>` : ''}
+    <div class="mp-src">${svg(I.info)}${S.myPrefs[ME] ? `入住共识里由你本人填写，${S.onboardDone[ME]} 改过` : `${S.onboardDone[ME]} 由你本人在入住共识里填写`}</div>
+  </section>
+
+  <div class="megrid">
+    <section class="card mesec">
+      <div class="ms-h"><span class="ms-i">${svg(I.home)}</span><b>我的空间</b></div>
+      <ul class="melist">
+        <li><span class="ml-i">${svg(I.lock)}</span><div><b>${me.room}</b><span>私人房间</span></div><span class="pill plain">私人</span></li>
+        ${myZones.map(({ sp, z }) => `<li><span class="ml-i">${svg(I[sp.icon] || I.space)}</span>
+          <div><b>${sp.name} ${z.n}</b><span>${z.pending ? '分区待其他成员确认' : '公共家具里分配给你的区域'}</span></div>
+          <span class="pill ${z.pending ? 'warn' : 'ok'}">${z.pending ? '待确认' : '你的分区'}</span></li>`).join('')}
+      </ul>
+    </section>
+
+    <div class="mecol">
+      <section class="card mesec">
+        <div class="ms-h"><span class="ms-i">${svg(I.box)}</span><b>我的物品</b><button class="btn sm" data-act="newThing">${svg(I.plus)}添加物品</button></div>
+        ${myThings.length ? `<ul class="things">${myThings.map(thingRow).join('')}</ul>`
+          : '<div class="empty">还没有登记物品。不需要录入所有东西，只在需要说清楚归属或借用方式时添加。</div>'}
+      </section>
+      <section class="card mesec">
+        <div class="ms-h"><span class="ms-i">${svg(I.chore)}</span><b>我的责任</b><span class="ms-sub">本周 ${tasks.length} 项</span></div>
+        <ul class="melist tasks">${tasks.map(t => `<li class="${t.done ? 'dim' : ''}">
+          <span class="ml-i">${svg(t.done ? I.check : I.chore)}</span>
+          <div><b>${t.task}</b>${t.done && t.doneAt ? `<span>${t.doneAt} 标记完成</span>` : t.note ? `<span>${t.note}</span>` : ''}</div>
+          <span class="pill ${t.done ? 'ok' : 'warn'}">${t.done ? '已完成' : t.due}</span>
+          ${t.done ? '' : `<button class="btn pri sm" data-act="doneTask" data-id="${t.id}">${svg(I.check)}完成</button>`}</li>`).join('')
+          || '<li><div><b>这周没有分配给你的任务</b></div></li>'}</ul>
+      </section>
+    </div>
+  </div>
+
+  <div class="megrid">
+    <section class="card mesec">
+      <div class="ms-h"><span class="ms-i">${svg(I.bill)}</span><b>我的账单</b></div>
+      <div class="mebill">
+        <div><b>待我支付</b><span>${due.map(b => b.title).join(' · ') || '没有待支付的费用'}</span></div>
+        <em>${yuan(myDueTotal())}</em>
+        <button class="btn" data-act="go" data-tab="bill">查看账单${svg(I.chev)}</button>
       </div>
-    </div>
+    </section>
 
-    ${sec('我的生活偏好', '', `<button class="btn sm" data-act="startQuiz">重新填写</button>`)}
-    <div class="vals">${KEY_PREFS.map(k => { const p = PREF_KEYS.find(x => x.k === k);
-      return `<span class="val" style="padding-left:10px">${p.label} <b>${me.prefs[k]}</b></span>`; }).join('')}
-      ${S.showAllPrefs ? PREF_KEYS.filter(p => !KEY_PREFS.includes(p.k)).map(p =>
-        `<span class="val" style="padding-left:10px">${p.label} <b>${me.prefs[p.k]}</b></span>`).join('') : ''}
-      <button class="val linkish" data-act="togglePrefs">${S.showAllPrefs ? '收起' : `查看全部 ${PREF_KEYS.length} 项`}</button>
-    </div>
-    ${srcTag({ via:'member', by:ME, at:S.onboardDone[ME] + ' 完成入住共识' })}
-
-    ${sec('我的空间')}
-    <div class="card rows">
-      <div class="row"><div class="main"><div class="ttl">${me.room}</div><div class="meta">私人房间</div></div>
-        <div class="right"><span class="pill plain">${svg(I.lock)}私人</span></div></div>
-      ${myZones.map(z => `<div class="row"><div class="main"><div class="ttl">${z}</div>
-        <div class="meta">公共家具中属于你的分区</div></div>
-        <div class="right"><span class="pill ok">你的</span></div></div>`).join('')}
-    </div>
-
-    ${sec('我的物品', '只在需要划清边界时登记', `<button class="btn sm" data-act="newThing">${svg(I.plus)}添加物品</button>`)}
-    <div class="card rows">${myThings.length ? myThings.map(s => `
-      <div class="row"><div class="main"><div class="ttl">${s.name}
-        <span class="pill ${s.kind === 'lend' ? 'info' : 'plain'}">${s.kind === 'lend' ? '可借' : '私人'}</span></div>
-        <div class="meta">${s.rule || s.zone || ''}</div>${srcTag(s.src)}</div>
-      <div class="cta"><button class="btn sm" data-act="delThing" data-id="${s.id}">删除</button></div></div>`).join('')
-      : '<div class="empty">还没有登记物品。不需要录入所有东西，只在需要说清楚归属时添加。</div>'}
-    </div>
-
-    ${sec('我的责任', `本周 ${S.tasks.filter(t => t.who === ME).length} 项`)}
-    <div class="card rows">${S.tasks.filter(t => t.who === ME).map(t => `
-      <div class="row ${t.done ? 'dim' : ''}"><div class="main"><div class="ttl">${t.task}
-        <span class="pill ${t.done ? 'ok' : 'warn'}">${t.done ? '已完成' : t.due}</span></div>
-        ${t.done && t.doneAt ? `<div class="meta">${t.doneAt} 标记完成</div>` : ''}</div>
-      <div class="cta">${t.done ? '' : `<button class="btn sm pri" data-act="doneTask" data-id="${t.id}">${svg(I.check)}完成</button>`}</div></div>`).join('')}
-    </div>
-
-    ${sec('我的账单')}
-    <div class="card rows">
-      <div class="row"><div class="main"><div class="ttl">待我支付</div>
-        <div class="meta">${myDue().map(b => b.title).join(' · ') || '没有待支付的费用'}</div></div>
-        <div class="right"><div class="amt">${yuan(myDueTotal())}</div></div>
-        <div class="cta"><button class="btn sm" data-act="go" data-tab="bill">查看账单</button></div></div>
-    </div>
-
-    ${sec('房屋服务', '由相寓同步', `<button class="btn sm" data-act="newRepair">${svg(I.plus)}我要报修</button>`)}
-    <div class="card rows">
-      <div class="row"><div class="main"><div class="ttl">租赁机构</div><div class="meta">${HOUSE.org} · ${HOUSE.steward}</div></div></div>
-      <div class="row"><div class="main"><div class="ttl">下一次公区保洁</div><div class="meta">${HOUSE.clean.next}</div>
-        ${srcTag(HOUSE.clean.src)}</div></div>
-      ${S.repairs.map(r => `<div class="row"><div class="main"><div class="ttl">${r.desc}</div>
-        <div class="meta">${r.place} · ${mem(r.by).name} 于 ${r.timeline[0].at} 提交</div></div>
-        <div class="right"><span class="pill warn">${repairState(r).s}</span></div></div>`).join('')}
-    </div>
-
-    ${sec('离开这个家')}
-    <div class="card pad">
-      <p style="font-size:13.5px;color:var(--ink-2)">搬出会生成一份清单：待结账单、私人物品、公共资产权益、空间清理、钥匙归还、值日退出。
-        全部完成后你就正式离开，而这个家会继续运行下去。</p>
-      <div class="btnrow" style="margin-top:12px">
-        <button class="btn" data-act="go" data-tab="me" data-sub="moveout">查看搬出流程</button>
+    <section class="card mesec">
+      <div class="ms-h"><span class="ms-i">${svg(I.tool)}</span><b>与我相关的房屋服务</b><button class="lcgo" data-act="go" data-tab="life">查看全部服务${svg(I.arrow)}</button></div>
+      <div class="mesvc">
+        <div class="svc"><span class="svc-i">${svg(I.home)}</span><b>租赁机构</b><span>${HOUSE.org}</span><em>联系管家：${HOUSE.steward}</em></div>
+        <div class="svc"><span class="svc-i">${svg(I.broom)}</span><b>下一次公区保洁</b><span>${HOUSE.clean.next}</span><em>${srcNote(HOUSE.clean.src)}</em></div>
+        ${myRepairs.map(r => `<div class="svc"><span class="svc-i">${svg(I.tool)}</span><b>${r.desc}</b><span class="warm">${repairState(r).s}</span><em>${me.name} · ${r.timeline[0].at.split(' ')[0]} 提交</em></div>`).join('')}
       </div>
-    </div>`;
+    </section>
+  </div>
+
+  <section class="card meout">
+    <span class="mo-i">${svg(I.truck)}</span>
+    <div class="mo-t">
+      <div class="mo-h"><b>搬出与退租</b><span>当你确定不再继续居住时，可按清单逐步完成准备。</span></div>
+      <div class="mo-chips">${steps.map(s => `<span>${svg(MOVE_STEP_ICON[s.id] || I.check)}${s.t}</span>`).join('')}<span class="more">…</span></div>
+      <p class="mo-note">${svg(I.info)}完成清单后，还需等待租赁机构确认退租，你的成员身份才会正式结束。</p>
+    </div>
+    <button class="btn pri" data-act="go" data-tab="me" data-sub="moveout">${svg(I.arrow)}开始搬出准备</button>
+  </section>`;
 }
 
 function vMoveout() {
   const mo = S.moveout || defaultMoveout();
   const done = mo.items.filter(i => i.done).length;
   const all = done === mo.items.length;
+  const org = HOUSE.org.split(' · ')[0];
 
   return `
     ${backBtn('我的', 'me')}
-    ${head('搬出流程', '有人离开，也会有人搬进来，这个家不会被删除。共同约定、公共资产和空间分区都会留下来。')}
+    ${head('搬出与退租', '有人离开，也会有人搬进来，这个家不会被删除。共同约定、公共资产和空间分区都会留下来。')}
     <div class="notice" style="margin-bottom:12px">${svg(I.info)}<span>
       这是流程预览，你现在并没有在搬出。点击任意一项可以切换状态，看看整个交接是怎么走完的。</span></div>
     <div class="card pad" style="margin-bottom:12px">
       <div style="display:flex;gap:11px;align-items:center">${av(ME, 'lg')}
-        <div style="flex:1"><div style="font-family:var(--f-d);font-weight:600;font-size:15.5px">如果你要搬出，需要完成这些</div>
+        <div style="flex:1"><div style="font-family:var(--f-d);font-weight:600;font-size:15.5px">如果你要搬出，需要完成这些准备</div>
           <div style="font-size:13px;color:var(--ink-2);margin-top:1px">清单完成 ${done}/${mo.items.length}</div></div>
-        ${all ? '<span class="pill ok">已走完</span>' : '<span class="pill plain">预览中</span>'}</div>
+        ${all ? '<span class="pill warn">等待机构确认退租</span>' : '<span class="pill plain">预览中</span>'}</div>
     </div>
     <div class="card rows" style="margin-bottom:12px">
       ${mo.items.map(i => `<div class="chk ${i.done ? 'on' : ''}" data-act="moveChk" data-id="${i.id}" role="button" tabindex="0">
         <span class="box">${svg(I.check, 2.6)}</span><span class="ct">${i.t}</span><span class="cm">${i.m}</span></div>`).join('')}
+      <div class="chk final"><span class="box">${svg(I.clock, 2.2)}</span><span class="ct">与租赁机构确认退租</span><span class="cm">由${org}${HOUSE.steward}确认，App 不能代替</span></div>
     </div>
-    ${all ? `<div class="card pad" style="border-color:var(--jade-line)">
-      <b style="font-family:var(--f-d);font-size:15px">六项走完后，你就正式离开 503</b>
+    <div class="card pad" style="border-color:var(--sage-line)">
+      <b style="font-family:var(--f-d);font-size:15px">${all ? `准备已完成，正在等待${org}确认退租` : '完成清单，不等于已经退租'}</b>
       <p style="font-size:13.5px;color:var(--ink-2);margin-top:5px">
-        你的房间和分区会空出来等下一位成员，其余成员的分区不受影响。
-        历史账单、共同约定和公共资产都会留在这个家里，剩下的人照常生活。</p>
-    </div>` : ''}`;
+        ${all ? `清单里的事都做完了。${org}确认退租后，你的成员身份才会正式结束；在那之前你仍然是 ${HOUSE.name} 的成员。`
+              : `这里的清单只是帮你把搬出准备做完整。租赁关系是否结束由${org}确认，App 不会自己宣布你已退租。`}
+        你的房间和分区会空出来等下一位成员，其余成员的分区不受影响；历史账单、共同约定和公共资产都会留在这个家里。</p>
+    </div>`;
 }
 
 const VIEWS = { home:vHome, life:vLife, bill:vBill, talk:vTalk, me:vMe };
