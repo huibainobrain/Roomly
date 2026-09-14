@@ -328,6 +328,14 @@ Object.keys(SEED).forEach(k => { if (S[k] === undefined) S[k] = structuredClone(
 /* 访客头像是后加的展示字段，老存档里同一条登记按 id 补上 */
 S.visits.forEach(v => { const seed = SEED.visits.find(x => x.id === v.id);
   if (seed && seed.guestPhoto && !v.guestPhoto) v.guestPhoto = seed.guestPhoto; });
+/* 演示约定：公平分摊建议是账单页的展示重点，每次重新打开页面都恢复到"待决定"。
+   采用 / 维持两个动作只会生成一笔以 utilityForecast.title 命名的账单和一条动态，一并撤掉。 */
+{
+  const ft = S.utilityForecast.title;
+  S.fairApplied = false;
+  S.bills = S.bills.filter(b => b.title !== ft);
+  S.feed = S.feed.filter(f => !(f.who === 'sys' && f.text.startsWith(ft)));
+}
 ME = S.me || 'yiming';
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 const logFeed = (who, text, t) => { S.feed.unshift({ who, text, t: t || '刚刚' }); S.feed = S.feed.slice(0, 10); };
