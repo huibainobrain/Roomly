@@ -481,6 +481,10 @@ main{flex:1;min-width:0}
   border-radius:22px;padding:20px 22px;flex:1}
 .fairhero .fhi{width:40px;height:40px;border-radius:14px;background:var(--surface);color:var(--peach);display:grid;place-items:center;flex:none;box-shadow:var(--shadow)}
 .fairhero .fhi svg{width:20px;height:20px}
+/* 有灯泡插画时用插画，没图时退回线性图标 */
+.fairhero .fhi{position:relative;overflow:hidden}
+.fairhero .fhi img{position:absolute;inset:2px;width:auto;height:auto;max-width:36px;max-height:36px;margin:auto;object-fit:contain}
+.fairhero .fhi.ok svg{display:none}
 .fairhero .fhb{flex:1;min-width:0}
 .fairhero h2{font-size:18px;font-weight:600;line-height:1.35;color:var(--sage-deep)}
 .fairhero p{font-size:13.5px;color:var(--ink-2);line-height:1.6;margin-top:7px}
@@ -601,6 +605,7 @@ main{flex:1;min-width:0}
   .bstats{grid-template-columns:1fr 1fr}
   .bs-body{grid-template-columns:1fr}
   .bs-art{min-height:150px}
+  .bs-art img{object-position:50% 55%}   /* 横条只露中段：盆栽 + 柜面，文案压在渐隐区上 */
   .brow{grid-template-columns:64px 1fr auto 84px auto;grid-template-areas:"d w c a s" "d p q s x"}
   .bdate{grid-area:d} .bwhat{grid-area:w} .bchips{grid-area:c} .bamt{grid-area:a} .bstate{grid-area:s}
   .bpayer{grid-area:p} .bpeople{grid-area:q} .bact{grid-area:x;opacity:1}

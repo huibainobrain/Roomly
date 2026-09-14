@@ -692,7 +692,7 @@ function vBill() {
 
   const fairCard = pending ? `
     <div class="fairhero">
-      <span class="fhi">${svg(I.spark)}</span>
+      <span class="fhi"><img src="img/bill-idea.png" alt="" onload="this.parentNode.classList.add('ok')" onerror="this.remove()">${svg(I.spark)}</span>
       <div class="fhb">
         <h2>${S.utilityForecast.title}，要不要按登记在住天数来分？</h2>
         <p>${away.map(a => `${mem(a.who).name} 登记了 ${a.from} — ${a.to} 离家，共 ${a.days} 天`).join('；')}。
