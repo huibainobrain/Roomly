@@ -86,8 +86,12 @@ let ME = 'yiming';
 /* 每个人后来改过的偏好按人存在 S.myPrefs[id] 里，盖在入住时填的那份上面 */
 const mem = id => {
   const base = MEMBERS.find(m => m.id === id) || { id, name:id, short:'?', c:'#8A938D', prefs:{} };
-  const edits = typeof S !== 'undefined' && S && S.myPrefs && S.myPrefs[id];
-  return edits ? { ...base, prefs: { ...base.prefs, ...edits } } : base;
+  const has = typeof S !== 'undefined' && S;
+  const edits = has && S.myPrefs && S.myPrefs[id];
+  /* 机构推送过来的租约变更（入住日期）也记在状态里，刷新后仍然一致 */
+  const lease = has && S.leaseOverride && S.leaseOverride[id];
+  if (!edits && !lease) return base;
+  return { ...base, ...(lease || {}), prefs: edits ? { ...base.prefs, ...edits } : base.prefs };
 };
 /* ---------- 成员生命周期 ----------
    pending 租约已签、还没到入住日 → active 在住 → moved_out_pending_settlement 已搬出、账还没结清 → ended 成员关系结束
@@ -185,6 +189,9 @@ const STATUS_TEXT = { in:'在住', away:'登记离家中', incoming:'即将入�
 /* ============ 初始状态 ============ */
 const SUPPLY_STATES = ['充足', '不多了', '快用完', '已用完'];
 
+/* 种子数据一变就换版本号，让还开着的标签页也回到新的起点 */
+const SEED_VERSION = '2026-09-14a';
+
 const SEED = {
   tab: 'home',
   sub: null,
@@ -194,6 +201,7 @@ const SEED = {
   settling: [],
   movedOut: [],
   moveoutRecord: null,
+  leaseOverride: {},
 
   /* 离家只有这一份原始记录，成员状态、值日、采购、公平分摊都由它推导 */
   away: [
@@ -358,77 +366,26 @@ const SEED = {
   pending: null
 };
 
-/* ============ 持久化 ============ */
-const KEY = 'hezu-v4';
+/* ============ 持久化 ============
+   这是演示产品：每次新打开页面都回到同一个固定的初始状态，谁体验过、做过什么都不会带给下一个人。
+   状态只放在 sessionStorage 里——同一个标签页里刷新会保留你刚才的操作（方便一步步验证），
+   关掉标签页或新开一个页面就是全新的一份种子数据。演示面板里的「重置演示数据」可以随时回到起点。 */
+const KEY = 'hezu-demo';
 let S;
+try { localStorage.removeItem('hezu-v4'); } catch (e) {}
 try {
-  const raw = JSON.parse(localStorage.getItem(KEY));
-  /* 旧版本存档缺字段时整份回退到种子数据，避免半旧半新的状态 */
-  const complete = raw && ['bills','rules','spaces','completions','requests','repairs','visits']
-    .every(k => Array.isArray(raw[k]));
+  const raw = JSON.parse(sessionStorage.getItem(KEY));
+  /* 同一标签页里如果部署了新版本、字段对不上，整份回退到种子数据，避免半旧半新的状态 */
+  const complete = raw && raw.seedVersion === SEED_VERSION &&
+    ['bills','rules','spaces','completions','requests','repairs','visits','topics'].every(k => Array.isArray(raw[k]));
   S = complete ? raw : structuredClone(SEED);
-  /* 机构名称改过：老存档里的动态、清单文案一并换掉 */
-  if (complete && JSON.stringify(raw).includes('相寓')) S = JSON.parse(JSON.stringify(raw).split('相寓').join('租房中介'));
 } catch (e) { S = structuredClone(SEED); }
-/* 补齐后来新增的可选字段，老存档也能正常跑 */
 Object.keys(SEED).forEach(k => { if (S[k] === undefined) S[k] = structuredClone(SEED[k]); });
-/* 访客头像是后加的展示字段，老存档里同一条登记按 id 补上 */
-S.visits.forEach(v => { const seed = SEED.visits.find(x => x.id === v.id);
-  if (seed && seed.guestPhoto && !v.guestPhoto) v.guestPhoto = seed.guestPhoto; });
-S.supplies.forEach(x => { const seed = SEED.supplies.find(y => y.id === x.id);
-  if (seed && seed.photo && !x.photo) x.photo = seed.photo; });
-/* 访客身份和费用类型是后加的字段：老存档里的登记按"登记人:称呼"补上 guestId，账单按标题推断类型 */
-S.visits.forEach(v => { const seed = SEED.visits.find(x => x.id === v.id);
-  if (seed && !v.guestId) { v.guest = seed.guest; v.guestId = seed.guestId; }
-  if (!v.guestId) v.guestId = `${v.host}:${(v.guest || '朋友').trim()}`; });
-S.requests.forEach(r => { if (r.id === 'rq1' && !r.guestId) Object.assign(r, { subject:SEED.requests[0].subject, guest:'女朋友', guestId:'alex:女朋友' }); });
-S.bills.forEach(b => { const seed = SEED.bills.find(x => x.id === b.id); if (seed && !b.kind) b.kind = seed.kind; });
-if (!S.utilityForecast.kind) S.utilityForecast.kind = 'utility';
-/* 更早的存档把偏好修改存成一份扁平对象，现在按人存 */
-if (S.myPrefs && Object.keys(S.myPrefs).some(k => PREF_KEYS.some(p => p.k === k))) S.myPrefs = { [S.me || 'yiming']: S.myPrefs };
-/* 约定对应的偏好值是后加的字段，老存档按 id 补上 */
-S.rules.forEach(r => { const seed = SEED.rules.find(x => x.id === r.id);
-  if (seed && seed.prefVal && r.prefVal === undefined && !(r.history && r.history.length)) r.prefVal = seed.prefVal; });
-/* 演示约定：公平分摊建议是账单页的展示重点，每次重新打开页面都恢复到"待决定"。
-   采用 / 维持两个动作只会生成一笔以 utilityForecast.title 命名的账单和一条动态，一并撤掉。 */
-{
-  const ft = S.utilityForecast.title;
-  S.fairApplied = false;
-  S.bills = S.bills.filter(b => b.title !== ft);
-  S.feed = S.feed.filter(f => !(f.who === 'sys' && f.text.startsWith(ft)));
-}
-/* 演示约定：共识页的讨论在同一个标签页里刷新会保留（表态、补充意见、方案版本都还在），
-   新开一个标签页 / 窗口时回到起点。
-   讨论会一路改到规则（版本、措辞、新增）和问题记录，所以回到起点时这一整片
-   （议题、规则、问题记录）整体恢复到种子数据，相关的系统动态一并撤掉。
-   其他页面自己产生的动态（记账、库存、访客等）不受影响。 */
-let freshOpen = true;
-try { freshOpen = !sessionStorage.getItem('hezu-open'); sessionStorage.setItem('hezu-open', '1'); } catch (e) {}
-if (freshOpen) {
-  S.topics = structuredClone(SEED.topics);
-  S.rules = structuredClone(SEED.rules);
-  S.issues = structuredClone(SEED.issues);
-  const TALK_FEED = ['项差异已进入讨论', '暂不调整，保持原有约定', '的建议已提交全员确认', '进入重新确认',
-    '新增讨论议题', '已提到家里一起讨论', '的标准被重新明确', '已更新到第', '已获全员确认，成为共同约定',
-    '达成了新的约定', '的方案调整到第', '重新打开了讨论',
-    '按共同约定发出提醒', '发出了一次私下提醒', '提交了一份协调摘要'];
-  S.feed = S.feed.filter(f => !(f.who === 'sys' && TALK_FEED.some(k => f.text.includes(k))));
-}
-delete S.linDiscussed;
-/* 更早版本存档里的议题用 votes 记表态，按现在的结构补齐 */
-S.topics.forEach(t => {
-  if (t.positions) return;
-  t.positions = {}; t.version = t.version || 1; t.history = t.history || [];
-  t.proposal = t.proposal || t.detail || '';
-  t.status = t.status === 'agreed' ? 'resolved' : t.status === 'hold' ? 'hold' : 'discussion';
-  Object.entries(t.votes || {}).forEach(([id, v]) =>
-    t.positions[id] = { stance: v === '同意' ? 'agree' : 'undecided', note:'', version:1, at:'' });
-  delete t.votes;
-});
+S.seedVersion = SEED_VERSION;
 ME = S.me || 'yiming';
 /* 只关乎这一屏怎么显示、不需要记住的状态：对比区展开没有、哪张卡正在写补充意见 */
 const UI = { sameOpen:false, noteFor:null, editFor:null };
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+const save = () => { try { sessionStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 const logFeed = (who, text, t) => { S.feed.unshift({ who, text, t: t || '刚刚' }); S.feed = S.feed.slice(0, 10); };
 
 /* ============ 派生计算 ============ */

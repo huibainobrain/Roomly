@@ -89,7 +89,7 @@ document.addEventListener('click', e => {
   case 'seg': S.segment = el.dataset.k; render(); break;
   case 'togglePrefs': S.showAllPrefs = !S.showAllPrefs; render(); break;
   case 'demoPanel': S.demoPanel = !S.demoPanel; render(); break;
-  case 'reset': S = structuredClone(SEED); ME = S.me; ensureLinTopics(); render(); toast('演示数据已重置'); break;
+  case 'reset': S = structuredClone(SEED); S.seedVersion = SEED_VERSION; ME = S.me; ensureLinTopics(); render(); toast('演示数据已重置'); break;
   case 'switchMe': {
     ME = el.dataset.k; S.me = ME; S.demoPanel = false; S.sub = null;
     UI.noteFor = null; UI.editFor = null;
@@ -98,11 +98,11 @@ document.addEventListener('click', e => {
   }
   /* 租房中介侧的变更由平台推送，住户不能自己改 */
   case 'syncPlatform': {
-    const lin = MEMBERS.find(m => m.id === 'lin');
-    lin.joined = lin.joined === '9月20日' ? '9月25日' : '9月20日';
-    lin.lease = { via:'platform', at:stamp() };
-    logFeed('sys', `租房中介更新了 ${lin.name} 的入住日期：${lin.joined}`);
-    render(); toast(`租房中介已同步：${lin.name} 改为 ${lin.joined} 入住，相关页面已全部更新`);
+    const lin = mem('lin');
+    const joined = lin.joined === '9月20日' ? '9月25日' : '9月20日';
+    S.leaseOverride.lin = { joined, lease:{ via:'platform', at:stamp() } };
+    logFeed('sys', `租房中介更新了 ${lin.name} 的入住日期：${joined}`);
+    render(); toast(`租房中介已同步：${lin.name} 改为 ${joined} 入住，相关页面已全部更新`);
     break;
   }
   /* 租约生效由机构推送：pending → active，之后才参与任务、新账单和完整的家里事务 */
