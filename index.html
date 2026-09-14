@@ -111,6 +111,18 @@ nav{display:flex;flex-direction:column;gap:2px}
 .idlist button small{margin-left:auto;font-size:11px;color:var(--ink-4);font-weight:400}
 main{flex:1;min-width:0}
 .wrap{max-width:880px;padding:28px 30px 72px;margin:0 auto}
+/* 作品说明条：一眼能看到"4 小时搭建"和"数据会重置" */
+.aboutband{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 22px;background:var(--cream);border-bottom:1px solid var(--sand-2);font-size:12.5px;color:var(--ink-2);line-height:1.5}
+.ab-tag{display:inline-flex;align-items:center;background:var(--peach);color:#fff;font-weight:700;font-size:12px;letter-spacing:.02em;border-radius:999px;padding:3px 10px;white-space:nowrap}
+.ab-text b{color:var(--ink);font-weight:600}
+.ab-sep{color:var(--ink-4)}
+.ab-link{margin-left:auto;color:var(--sage-deep);font-weight:600;text-decoration:none;white-space:nowrap}
+.ab-link:hover{text-decoration:underline}
+@media (max-width:760px){
+  .aboutband{padding:9px 14px;gap:6px;font-size:12px}
+  .ab-sep{display:none}
+  .ab-link{margin-left:0}
+}
 .topbar,.tabbar{display:none}
 
 /* ============ avatars & status ============ */
@@ -1315,6 +1327,14 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--jade);outline-of
     </div>
   </aside>
   <main>
+    <!-- 作品说明条：这是限时 4 小时、借助 AI coding 完成的原型；演示数据每次打开都会重置 -->
+    <div class="aboutband" role="note">
+      <span class="ab-tag">限时 4 小时搭建</span>
+      <span class="ab-text">这是一款<b>借助 AI coding、在 4 小时内完成</b>的产品原型，展示从需求分析到交付的快速构建能力。</span>
+      <span class="ab-sep" aria-hidden="true">·</span>
+      <span class="ab-text">演示数据<b>每次打开都会重置</b>，可以放心操作。</span>
+      <a class="ab-link" href="https://github.com/huibainobrain/hezu-life-manager" target="_blank" rel="noopener">查看 GitHub ↗</a>
+    </div>
     <header class="topbar">
       <span class="mark" id="markB"></span>
       <span><span class="hn" id="hNameM"></span><span class="ho" id="hOrgM"></span></span>
