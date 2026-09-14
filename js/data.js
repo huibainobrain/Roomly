@@ -336,6 +336,20 @@ S.visits.forEach(v => { const seed = SEED.visits.find(x => x.id === v.id);
   S.bills = S.bills.filter(b => b.title !== ft);
   S.feed = S.feed.filter(f => !(f.who === 'sys' && f.text.startsWith(ft)));
 }
+/* 演示约定：共识页的"正在讨论"也每次重新打开都回到起点。
+   讨论会一路改到规则（版本、措辞、新增）和问题记录，所以这一整片（议题、规则、
+   Lin 的讨论开关、问题记录）整体恢复到种子数据，相关的系统动态一并撤掉。
+   其他页面自己产生的动态（记账、库存、访客等）不受影响。 */
+{
+  S.topics = structuredClone(SEED.topics);
+  S.rules = structuredClone(SEED.rules);
+  S.issues = structuredClone(SEED.issues);
+  S.linDiscussed = SEED.linDiscussed;
+  const TALK_FEED = ['项差异已进入讨论', '暂不调整，保持原有约定', '的建议已提交全员确认', '进入重新确认',
+    '新增讨论议题', '已提到家里一起讨论', '的标准被重新明确', '已更新到第', '已获全员确认，成为共同约定',
+    '按共同约定发出提醒', '发出了一次私下提醒', '提交了一份协调摘要'];
+  S.feed = S.feed.filter(f => !(f.who === 'sys' && TALK_FEED.some(k => f.text.includes(k))));
+}
 ME = S.me || 'yiming';
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 const logFeed = (who, text, t) => { S.feed.unshift({ who, text, t: t || '刚刚' }); S.feed = S.feed.slice(0, 10); };
