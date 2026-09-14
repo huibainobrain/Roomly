@@ -512,15 +512,17 @@ document.addEventListener('click', e => {
   case 'agreeTopic': {
     const t = S.topics.find(x => x.id === id);
     t.votes = t.votes || {}; t.votes[ME] = '同意';
-    const full = Object.keys(t.votes).length >= living().length;
-    if (full) finishTopic(t);
-    render(); toast(full ? '全员已表态，已成为共同约定' : '已记录你的意见');
+    /* 全员都同意才成为约定；有人想再聊聊，议题就继续开着，表态随时可以改 */
+    const all = living().every(m => t.votes[m.id] === '同意');
+    const spoken = living().every(m => t.votes[m.id]);
+    if (all) finishTopic(t);
+    render(); toast(all ? '大家都同意了，已成为共同约定' : spoken ? '已记录。还有人想再聊聊，先不改约定' : '已记录你的意见，随时可以改');
     break;
   }
   case 'discussTopic': {
     const t = S.topics.find(x => x.id === id);
     t.votes = t.votes || {}; t.votes[ME] = '想讨论一下';
-    render(); toast('已记录。想讨论不是反对，只是需要再聊聊。');
+    render(); toast('已记录。想讨论不是反对，只是需要再聊聊，改主意了随时可以点同意。');
     break;
   }
   /* 没达成一致也是一种结果：原约定保持不变 */
@@ -541,7 +543,7 @@ document.addEventListener('click', e => {
     const d = linDiff();
     d.diff.forEach(x => S.topics.push({ id:'tp' + Date.now() + x.k, title:`${x.label}（${d.lin.name} 入住后）`,
       done:false, detail:`现在家里是 ${x.house}，${d.lin.name} 的偏好是 ${x.lin}。${SUGGESTION[x.k] || ''}`,
-      votes:{ [ME]:'同意' }, prefKey:x.k }));
+      votes:{}, prefKey:x.k }));
     S.linDiscussed = true;
     logFeed('sys', `${d.lin.name} 入住前的 ${d.diff.length} 项差异已进入讨论`);
     goTo('talk'); toast(`已发起 ${d.diff.length} 个议题，其余 ${d.same.length} 项保持不变`);

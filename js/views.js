@@ -869,6 +869,7 @@ function vTalk() {
     const votes = t.votes || {}, mine = votes[ME];
     const voted = living().filter(m => votes[m.id]).map(m => m.id);
     const waiting = living().filter(m => !votes[m.id]).map(m => m.name);
+    const talking = living().filter(m => votes[m.id] === '想讨论一下').map(m => m.name);
     const item = t.prefKey ? d.diff.find(x => x.k === t.prefKey) : null;
     const title = t.prefKey ? prefLabel(t.prefKey) : t.title;
     return `
@@ -885,11 +886,13 @@ function vTalk() {
           ? `<span class="tk-st on">${av(m.id, 'sm')}${m.name}${m.id === ME ? '（你）' : ''} · ${votes[m.id]}</span>`
           : `<span class="tk-st">${av(m.id, 'sm out')}${m.name} 还没说</span>`).join('')}</div>
         <div class="tk-foot">
-          <span class="tk-who">${stack(living().map(m => m.id), living().filter(m => !votes[m.id]).map(m => m.id))}<em>${waiting.length ? `等 ${waiting.join('、')} 表态` : '大家都说了'}</em></span>
+          <span class="tk-who">${stack(living().map(m => m.id), living().filter(m => !votes[m.id]).map(m => m.id))}<em>${
+            waiting.length ? `等 ${waiting.join('、')} 表态`
+            : talking.length ? `${talking.join('、')} 想再聊聊，可以先调整建议，或者暂不调整` : '大家都同意了'}</em></span>
         </div>
         <div class="btnrow tk-acts">
-          ${mine ? '' : `<button class="btn pri sm" data-act="agreeTopic" data-id="${t.id}">同意</button>
-            <button class="btn sm" data-act="discussTopic" data-id="${t.id}">想讨论一下</button>`}
+          <button class="btn sm ${mine === '同意' ? 'on' : 'pri'}" data-act="agreeTopic" data-id="${t.id}" aria-pressed="${mine === '同意'}">${mine === '同意' ? svg(I.check) + '已同意' : '同意'}</button>
+          <button class="btn sm ${mine === '想讨论一下' ? 'on' : ''}" data-act="discussTopic" data-id="${t.id}" aria-pressed="${mine === '想讨论一下'}">${mine === '想讨论一下' ? svg(I.check) + '想再聊聊' : '想讨论一下'}</button>
           <button class="btn sm" data-act="holdTopic" data-id="${t.id}">暂不调整</button>
         </div>
       </div>
