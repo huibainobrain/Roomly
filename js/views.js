@@ -151,7 +151,7 @@ function vHome() {
         ${f.who === 'sys'
           ? `<span class="sic">${svg(I.spark)}</span>`
           : av(f.who, 'lg')}
-        <span class="stx">${f.who === 'sys' ? '<b>合租管家</b> ' : `<b>${mem(f.who).name}</b> `}${f.text}
+        <span class="stx">${f.who === 'sys' ? '<b>Roomly 管家</b> ' : `<b>${mem(f.who).name}</b> `}${f.text}
           <div class="stm">${f.t}</div></span></li>`).join('')}</ul>
     </aside>
   </div>
