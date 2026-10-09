@@ -16,6 +16,11 @@ function openSheet(html, wide) {
 function closeSheet() { ov().hidden = true; sheetEl().innerHTML = ''; }
 
 const uline = (l, v) => `<div class="uline"><span class="ul">${l}</span><span class="uv">${v}</span></div>`;
+/* 日期选择：值是 dn，显示是人话。演示时间推进之后这些选项跟着走 */
+const dayOpts = (sel, from, to) => { let o = '';
+  for (let i = from; i <= to; i++) { const d = dnNow() + i;
+    o += `<option value="${d}" ${d === sel ? 'selected' : ''}>${fmtDn(d)} ${wdOfDn(d)}${i === 0 ? '（今天）' : i === 1 ? '（明天）' : ''}</option>`; }
+  return o; };
 const understandBox = (title, lines) =>
   `<div class="understand"><div class="uh">${title}</div><div class="ub">${lines.join('')}</div></div>`;
 const impactBox = (lines) =>
@@ -27,17 +32,7 @@ const acts = (confirmAct, confirmLabel, extra) =>
 /* ============================================================
    跟管家说一句 —— 自然表达 → 结构化理解 → 影响 → 确认
    ============================================================ */
-const TODAY_DATE = new Date(2026, 8, 12);
 const CN_NUM = { '一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'日':7,'天':7 };
-const fmtDate = d => `${d.getMonth() + 1}月${d.getDate()}日`;
-
-function weekdayDate(cn, nextWeek) {
-  const target = CN_NUM[cn];
-  const ci = TODAY_DATE.getDay() === 0 ? 7 : TODAY_DATE.getDay();
-  const monday = new Date(TODAY_DATE); monday.setDate(TODAY_DATE.getDate() - (ci - 1));
-  const d = new Date(monday); d.setDate(monday.getDate() + (nextWeek ? 7 : 0) + (target - 1));
-  return d;
-}
 
 const CN_DIGIT = { '零':0,'一':1,'两':2,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10 };
 function cnNum(s) {
@@ -48,164 +43,337 @@ function cnNum(s) {
   return CN_DIGIT[s[0]] ?? 0;
 }
 
+/* ============================================================
+   跟管家说一句
+   自然表达 → 理解成结构化的几项 → 不确定的地方让你改 → 看清影响 → 确认 → 执行。
+   三条底线：
+     1. 缺信息就问，绝不自己填一个可能算错的数；
+     2. 识别错了，用户可以直接改金额、物品、数量、参与人、日期，不用重说一遍；
+     3. 最后执行的，就是你在预览里看到的那一份，不会换一种分法。
+   ============================================================ */
+
+/* 把一句话拆成若干"可能的意图"，含糊的时候让用户自己选，而不是替他猜 */
 function parseButler(raw) {
   const text = (raw || '').trim();
   if (!text) return null;
+  const hits = [];
 
-  /* 先判断是不是在更新库存 —— "只剩两卷"和"买了两卷"是两件完全不同的事 */
-  const hitSupply = S.supplies.find(s => s.kind === 'public' && text.includes(s.name));
-  if (hitSupply && /只剩|还剩|快没|快用完|用完了|没了|不多|剩下/.test(text) && !/买|购/.test(text)) {
-    if (hitSupply.mode === 'count') {
-      const m = text.match(/(\d+|[一二两三四五六七八九十]+)\s*(?:卷|个|瓶|包|条|袋|盒|提|片)/);
-      return { type:'stock', supply:hitSupply, qty: m ? cnNum(m[1]) : Math.max(0, hitSupply.min - 1) };
-    }
-    const state = /用完了|已经没/.test(text) ? '已用完'
-                : /不多/.test(text) ? '不多了' : '快用完';
-    return { type:'stock', supply:hitSupply, state };
-  }
+  const money = parseMoney(text);
+  const qtyM = text.match(/(\d+|[一二两三四五六七八九十]+)\s*(卷|个|瓶|包|条|袋|盒|提|片)/);
+  const qty = qtyM ? cnNum(qtyM[1]) : 0, unit = qtyM ? qtyM[2] : '';
+  const supply = S.supplies.find(x => x.kind === 'public' && text.includes(x.name));
 
-  /* 金额：29块9 / 29.9元 / ¥29.9 */
-  let amount = 0;
-  let m = text.match(/(\d+)\s*块\s*(\d)(?!\d)/);
-  if (m) amount = parseFloat(m[1] + '.' + m[2]);
-  if (!amount && (m = text.match(/(\d+(?:\.\d+)?)\s*(?:块|元|圆)/))) amount = parseFloat(m[1]);
-  if (!amount && (m = text.match(/[¥￥]\s*(\d+(?:\.\d+)?)/))) amount = parseFloat(m[1]);
+  /* 改上一笔记账 */
+  if (/改|修改|改一下|写错|记错|搞错|不对/.test(text) && /记账|账|费用|刚才|刚刚|那笔/.test(text))
+    hits.push({ type:'editBill', score:3 });
 
-  /* 数量 + 单位 */
-  let qty = 0, unit = '';
-  if ((m = text.match(/(\d+)\s*(卷|个|瓶|包|条|袋|盒|提|片)/))) { qty = parseInt(m[1]); unit = m[2]; }
+  /* 库存变少（"只剩两卷"和"买了两卷"是完全不同的两件事） */
+  if (supply && /只剩|还剩|快没|快用完|用完了|没了|不多|剩下/.test(text) && !/买|购/.test(text))
+    hits.push({ type:'stock', score:3, supply, qty: qtyM ? qty : null,
+      state: /用完了|已经没/.test(text) ? '已用完' : /不多/.test(text) ? '不多了' : '快用完' });
 
-  /* 购买公共用品 */
-  if (/买|购|补充|添|囤/.test(text)) {
-    const hit = S.supplies.find(s => s.kind === 'public' && text.includes(s.name));
-    const people = /各买各|我自己|私人/.test(text) ? [ME] : living().map(x => x.id);
-    return { type:'buy', supply: hit, name: hit ? hit.name : '公共用品',
-             qty: qty || (hit ? hit.min : 1), unit: unit || (hit ? hit.unit : '件'),
-             amount, people };
-  }
+  /* 买了公共用品 */
+  if (/买|购|补充|添|囤/.test(text))
+    hits.push({ type:'buy', score: 2 + (money ? 1 : 0) + (supply ? 1 : 0), supply,
+      name: supply ? supply.name : guessThingName(text), qty, unit, amount: money,
+      people: parsePeople(text) });
 
   /* 离家 */
-  if (/离家|回老家|出差|不在家|外出|旅行|回家住|出去几天/.test(text)) {
-    let from = null, to = null;
-    if ((m = text.match(/(下?)周([一二三四五六日天]).{0,3}?到.{0,3}?(下?)周?([一二三四五六日天])/))) {
-      from = weekdayDate(m[2], m[1] === '下');
-      to   = weekdayDate(m[4], (m[3] === '下') || (m[1] === '下'));
-      if (to < from) to.setDate(to.getDate() + 7);
-    } else if ((m = text.match(/(\d+)月(\d+)[日号].{0,3}?到.{0,3}?(?:(\d+)月)?(\d+)[日号]/))) {
-      from = new Date(2026, +m[1] - 1, +m[2]);
-      to   = new Date(2026, (m[3] ? +m[3] : +m[1]) - 1, +m[4]);
-    }
-    if (from && to) {
-      const days = Math.round((to - from) / 86400000) + 1;
-      return { type:'away', from: fmtDate(from), to: fmtDate(to), days };
-    }
-    return { type:'away', from:'', to:'', days:0, needDates:true };
+  if (/离家|回老家|出差|不在家|外出|旅行|回家住|出去几天|不在/.test(text)) {
+    const r = parseRange(text);
+    hits.push({ type:'away', score: 2 + (r ? 1 : 0), fromDn: r && r.from, toDn: r && r.to });
   }
 
   /* 访客 */
-  if (/访客|朋友来|来玩|过夜|留宿|住一晚|来住/.test(text)) {
-    return { type:'visit', overnight: /过夜|留宿|住一晚|住几天/.test(text) };
-  }
+  if (/访客|朋友来|来玩|过夜|留宿|住一晚|来住|客人/.test(text))
+    hits.push({ type:'visit', score:2, overnight:/过夜|留宿|住一晚|住几天/.test(text) });
 
-  /* 不好开口 */
-  if (/不好开口|不好意思说|难开口|有点介意|忍很久/.test(text)) return { type:'awkward' };
+  if (/不好开口|不好意思说|难开口|有点介意|忍很久|不知道怎么说/.test(text))
+    hits.push({ type:'awkward', score:3 });
 
-  return { type:'unknown', text };
+  if (!hits.length) return { type:'unknown', text };
+  hits.sort((a, b) => b.score - a.score);
+  /* 两个意图分数接近：不替用户选，先问清楚要做哪件事 */
+  if (hits.length > 1 && hits[0].score - hits[1].score <= 1)
+    return { type:'multi', text, options:hits.slice(0, 3) };
+  return { ...hits[0], text };
 }
+
+function parseMoney(text) {
+  let m = text.match(/(\d+)\s*块\s*(\d)(?!\d)/);
+  if (m) return parseFloat(m[1] + '.' + m[2]);
+  if ((m = text.match(/(\d+(?:\.\d+)?)\s*(?:块|元|圆)/))) return parseFloat(m[1]);
+  if ((m = text.match(/[¥￥]\s*(\d+(?:\.\d+)?)/))) return parseFloat(m[1]);
+  return 0;
+}
+/* 谁参与分摊："Tom 不用分"要真的把 Tom 去掉，而不是忽略这半句 */
+function parsePeople(text) {
+  const all = living().map(m => m.id);
+  if (/各买各|我自己|私人|不用分摊|我请/.test(text)) return [ME];
+  const out = all.slice();
+  MEMBERS.forEach(m => {
+    const re = new RegExp(`(?:${m.name}|${m.short})[^，。,]{0,4}(?:不用分|不用算|不参与|不算|别算|不分)`);
+    const re2 = new RegExp(`(?:除了|不含|不包括)\\s*(?:${m.name}|${m.short})`);
+    if ((re.test(text) || re2.test(text)) && out.includes(m.id)) out.splice(out.indexOf(m.id), 1);
+  });
+  return out.length ? out : all;
+}
+function guessThingName(text) {
+  const m = text.match(/买了?些?点?\s*([^\d，。,、]{1,8}?)(?:\d|，|。|,|、|$)/);
+  const n = m && m[1].trim().replace(/^的/, '');
+  return n && !/公共用品|东西|点|些/.test(n) ? n : '';
+}
+/* 日期区间："下周三到周日"、"9月16日到9月20日" */
+function parseRange(text) {
+  let m;
+  if ((m = text.match(/(下?)周([一二三四五六日天]).{0,3}?到.{0,3}?(下?)周?([一二三四五六日天])/))) {
+    const f = weekdayDn(m[2], m[1] === '下');
+    let t = weekdayDn(m[4], (m[3] === '下') || (m[1] === '下'));
+    if (t < f) t += 7;
+    return { from:f, to:t };
+  }
+  if ((m = text.match(/(\d+)月(\d+)[日号].{0,3}?到.{0,3}?(?:(\d+)月)?(\d+)[日号]/)))
+    return { from: dn(`${m[1]}月${m[2]}日`), to: dn(`${m[3] ? m[3] : m[1]}月${m[4]}日`) };
+  if ((m = text.match(/(\d+)\s*天/))) return { from: dnNow(), to: dnNow() + Math.max(1, +m[1]) - 1 };
+  return null;
+}
+function weekdayDn(cn, nextWeek) {
+  const target = CN_NUM[cn];
+  const d = dateOfDn(dnNow()), ci = d.getDay() === 0 ? 7 : d.getDay();
+  return dnNow() - (ci - 1) + (nextWeek ? 7 : 0) + (target - 1);
+}
+
+/* ---------- 可编辑的理解结果 ---------- */
+const bfield = (id, label, input, hint) =>
+  `<div class="bf"><label for="${id}">${label}</label>${input}${hint ? `<em>${hint}</em>` : ''}</div>`;
+const bMissing = lines => `<div class="bmiss">${svg(I.info)}<div><b>还缺一点信息</b><span>${lines.join('；')}。管家不会替你猜一个数字，因为猜错了账就算错了。</span></div></div>`;
 
 function butlerSheet(raw) {
   const p = parseButler(raw);
   if (!p) return;
-
   if (p.type === 'awkward') { closeSheet(); awkwardSheet(); return; }
+  if (p.type === 'visit') { closeSheet(); visitSheet(p.overnight); return; }
 
-  if (p.type === 'unknown') {
-    openSheet(`<h3>管家没有完全听懂</h3>
-      <p class="hint">为了不把事情做错，管家只在能明确理解时才会执行。你可以换个说法，或者直接选一件事。</p>
-      ${understandBox('你说的是', [uline('原话', `<span style="font-weight:400">${p.text}</span>`)])}
-      <div class="stack">
-        <button class="btn wide" data-act="butlerFill" data-text="我刚买了29块9的厕纸，12卷，三个人平分">我买了公共用品</button>
-        <button class="btn wide" data-act="butlerFill" data-text="我下周三到周日回老家">我要离开几天</button>
-        <button class="btn wide" data-act="newVisit">我有访客要来</button>
-        <button class="btn wide" data-act="awkward">有件事不好开口</button>
-      </div>
-      <div class="acts"><button class="btn" data-act="close">关闭</button></div>`);
-    return;
+  /* 听不懂：说清楚为什么做不了，并给出能直接去做这件事的入口 */
+  if (p.type === 'unknown') return openSheet(`<h3>这句话管家没有把握</h3>
+    <p class="hint">为了不把事情做错，管家只在能明确理解时才执行。可以换个说法，也可以直接选一件事去做。</p>
+    ${understandBox('你说的是', [uline('原话', `<span style="font-weight:400">${esc(p.text)}</span>`)])}
+    <div class="notice" style="margin-bottom:12px">${svg(I.info)}<span>它可能缺少"做什么"这个动作。比较好认的说法：<b>买了什么 + 多少钱</b>、<b>某样东西还剩多少</b>、<b>哪天到哪天不在家</b>。</span></div>
+    <div class="stack">
+      <button class="btn wide" data-act="butlerFill" data-text="我刚买了29块9的厕纸，12卷，三个人平分">我买了公共用品</button>
+      <button class="btn wide" data-act="butlerFill" data-text="厕纸只剩两卷了">更新公共物品剩多少</button>
+      <button class="btn wide" data-act="butlerFill" data-text="我下周三到周日回老家">我要离开几天</button>
+      <button class="btn wide" data-act="newVisit">我有访客要来</button>
+      <button class="btn wide" data-act="newBill">我要记一笔费用</button>
+      <button class="btn wide" data-act="awkward">有件事不好开口</button>
+    </div>
+    <div class="acts"><button class="btn" data-act="close">关闭</button></div>`);
+
+  /* 一句话里有好几件事：先确认你要做哪一件 */
+  if (p.type === 'multi') {
+    const NAME = { buy:'记一笔公共采购', stock:'更新物品剩多少', away:'登记离家', visit:'登记访客', editBill:'修改之前的记账', awkward:'有件事不好开口' };
+    const DESC = { buy:'会更新库存，并新增一笔要分摊的费用', stock:'只改数量或状态，不涉及钱', away:'影响值日、采购和水电分摊',
+      visit:'登记一次到访或留宿', editBill:'改金额、参与人或删掉一笔', awkward:'先说给管家听，再决定要不要开口' };
+    return openSheet(`<h3>这句话里好像有两件事</h3>
+      <p class="hint">它们产生的结果完全不同，先确认你现在想做哪一件。</p>
+      ${understandBox('你说的是', [uline('原话', `<span style="font-weight:400">${esc(p.text)}</span>`)])}
+      <div class="opts">${p.options.map(o => `
+        <button class="opt" data-act="butlerPick" data-k="${o.type}" data-text="${esc(p.text)}">
+          <span><b style="font-family:var(--f-d)">${NAME[o.type]}</b>
+          <span style="display:block;font-size:12.5px;color:var(--ink-3);font-weight:400">${DESC[o.type]}</span></span>
+          <span class="ok">${svg(I.check, 2.4)}</span></button>`).join('')}</div>
+      <div class="acts"><button class="btn" data-act="close">都不是，取消</button></div>`);
   }
 
-  if (p.type === 'stock') {
-    const s = p.supply;
-    S.pending = p;
-    const after = s.mode === 'count' ? `${s.qty} → ${p.qty} ${s.unit}` : `${s.state} → ${p.state}`;
-    const willLow = s.mode === 'count' ? p.qty < s.min : ['快用完','已用完'].includes(p.state);
-    openSheet(`<h3>管家理解成这样</h3>
-      <p class="hint">这会更新公共物品的状态，记在你名下，其他人能看到是谁什么时候更新的。</p>
-      ${understandBox('理解结果', [
-        uline('动作', '更新公共物品'),
-        uline('物品', s.name),
-        uline(s.mode === 'count' ? '数量' : '状态', after),
-        uline('更新人', `${av(ME, 'sm')}${mem(ME).name}`)
-      ])}
-      ${impactBox([
-        `${s.name}的记录更新为 ${s.mode === 'count' ? p.qty + ' ' + s.unit : p.state}`,
-        willLow ? '会低于约定水位，首页出现补充提醒' : '仍在约定水位以上，不会产生提醒',
-        '这次更新会记进家里动态',
-        '不会产生任何费用，除非你之后选择补充并记账'
-      ])}
-      ${acts('doStock', '确认更新')}`);
-    return;
-  }
+  if (p.type === 'editBill') return butlerEditBill(p);
+  if (p.type === 'stock') return butlerStock(p);
+  if (p.type === 'buy') return butlerBuy(p);
+  if (p.type === 'away') return butlerAway(p);
+}
 
-  if (p.type === 'buy') {
-    const per = p.amount / p.people.length;
-    S.pending = p;
-    /* 数量型物品按数量累加；状态型（洗衣液这类只记档位的）买回来就是"充足" */
-    const stateMode = p.supply && p.supply.mode === 'state';
-    const after = stateMode ? '充足' : (p.supply ? p.supply.qty : 0) + p.qty;
-    const change = stateMode ? `${p.supply.state} → 充足` : p.supply ? `${p.supply.qty} → ${after} ${p.unit}` : `+${p.qty} ${p.unit}`;
-    openSheet(`<h3>管家理解成这样</h3>
-      <p class="hint">这会同时改变库存和账单，所以先确认一下再执行。</p>
-      ${understandBox('理解结果', [
-        uline('物品', p.name),
-        uline(stateMode ? '状态变化' : '库存变化', change),
-        uline('金额', yuan(p.amount)),
-        uline('付款人', `${av(ME, 'sm')}${mem(ME).name}`),
-        uline('参与分摊', p.people.map(x => av(x, 'sm')).join('')),
-        uline('每人承担', `<span style="color:var(--jade)">${yuan(per)}</span>`)
-      ])}
-      ${impactBox([
-        stateMode ? `${p.name}状态更新为充足` : `${p.name}库存更新为 ${after} ${p.unit}`,
-        stateMode || (p.supply && after >= p.supply.min) ? '首页的库存不足提醒会消失' : '库存仍低于提醒水位，提醒会保留',
-        `账单新增一笔 ${yuan(p.amount)} 的公共支出，每人 ${yuan(per)}`,
-        '家里动态增加一条记录'
-      ])}
-      ${acts('doBuy', '确认并执行')}`);
-    return;
-  }
+const esc = t => String(t || '').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
-  if (p.type === 'away') {
-    if (p.needDates) { closeSheet(); awaySheet(); return; }
-    S.pending = p;
-    const affected = S.tasks.filter(t => t.who === ME && !t.done);
-    openSheet(`<h3>管家理解成这样</h3>
-      <p class="hint">离家会影响值日、采购和费用分摊，确认后这些都会自动跟着调整。</p>
-      ${understandBox('理解结果', [
-        uline('类型', '离家'),
-        uline('时间', `${p.from} — ${p.to}`),
-        uline('天数', `${p.days} 天`),
-        uline('成员', `${av(ME, 'sm')}${mem(ME).name}`)
-      ])}
-      ${impactBox([
-        `值日：期间你的 ${affected.length} 项任务会暂缓，后续轮换补偿`,
-        '公共采购：这段时间不会分配采购任务给你',
-        `费用：月末水电可按实际居住天数计算，你的居住天数为 ${30 - p.days} 天`,
-        '家里的状态和头像会显示为离家中'
-      ])}
-      ${acts('doAway', '确认离家')}`);
-    return;
-  }
+/* 用户在"这句话里有两件事"里挑了一件：按那一件重新解析同一句话 */
+function parseButlerAs(kind, text) {
+  const p = parseButler(text);
+  if (p && p.type === 'multi') { const hit = p.options.find(o => o.type === kind); if (hit) return { ...hit, text }; }
+  if (p && p.type === kind) return p;
+  return { type:kind, text };
+}
+function butlerRoute(p) {
+  if (p.type === 'stock') { if (!p.supply) p.supply = S.supplies.find(x => x.kind === 'public'); return butlerStock(p); }
+  if (p.type === 'buy') return butlerBuy({ people: living().map(m => m.id), ...p });
+  if (p.type === 'away') return butlerAway(p);
+  if (p.type === 'editBill') return butlerEditBill(p);
+  if (p.type === 'visit') return visitSheet(!!p.overnight);
+}
 
-  if (p.type === 'visit') { closeSheet(); visitSheet(p.overnight); }
+/* ---------- 修改之前的记账 ---------- */
+function butlerEditBill(p) {
+  const mine = S.bills.filter(b => b.src && b.src.by === ME).slice(0, 5);
+  if (!mine.length) return openSheet(`<h3>没有找到你记过的账</h3>
+    <p class="hint">管家只能帮你改你自己记的那几笔。</p>
+    <div class="acts"><button class="btn" data-act="close">知道了</button>
+      <button class="btn pri" data-act="newBill">记一笔新的</button></div>`);
+  openSheet(`<h3>要改哪一笔？</h3>
+    <p class="hint">改完之后，各人应付应收和月末净额都会重算。已经有人确认收款的那几笔，需要先撤销对应的结清才能改。</p>
+    <div class="opts">${mine.map(b => `
+      <button class="opt" data-act="editBill" data-id="${b.id}">
+        <span><b style="font-family:var(--f-d)">${b.title} · ${yuan(b.amount)}</b>
+        <span style="display:block;font-size:12.5px;color:var(--ink-3);font-weight:400">${b.date} · ${b.people.length} 人分${hasConfirmed(b) ? ' · 已有人确认收款' : ''}</span></span>
+        <span class="ok">${svg(I.check, 2.4)}</span></button>`).join('')}</div>
+    <div class="acts"><button class="btn" data-act="close">取消</button></div>`);
+}
+
+/* ---------- 更新库存 ---------- */
+function butlerStock(p) {
+  const s = p.supply;
+  const isCount = s.mode === 'count';
+  S.pending = { type:'stock', supplyId:s.id };
+  openSheet(`<h3>管家理解成这样</h3>
+    <p class="hint">这只改数量或状态，不涉及钱。下面每一项都可以改。</p>
+    <div class="bform">
+      ${bfield('bs-n', '物品', `<select id="bs-n">${S.supplies.filter(x => x.kind === 'public').map(x =>
+        `<option value="${x.id}" ${x.id === s.id ? 'selected' : ''}>${x.name}</option>`).join('')}</select>`)}
+      ${isCount
+        ? bfield('bs-q', '现在还剩', `<input type="number" id="bs-q" min="0" value="${p.qty != null ? p.qty : ''}" inputmode="numeric" placeholder="没听清，请填一个数">`, `单位：${s.unit}`)
+        : bfield('bs-s', '现在的状态', `<select id="bs-s">${SUPPLY_STATES.map(v =>
+            `<option value="${v}" ${v === (p.state || s.state) ? 'selected' : ''}>${v}</option>`).join('')}</select>`)}
+    </div>
+    <div id="bImpact"></div>
+    ${acts('doStock', '确认更新')}`);
+  const upd = () => {
+    const sid = document.getElementById('bs-n').value;
+    const cur = S.supplies.find(x => x.id === sid);
+    const qEl = document.getElementById('bs-q');
+    const q = qEl ? (qEl.value === '' ? null : Math.max(0, parseInt(qEl.value))) : null;
+    const st = document.getElementById('bs-s') ? document.getElementById('bs-s').value : null;
+    S.pending = { type:'stock', supplyId:sid, qty:q, state:st };
+    const missing = cur.mode === 'count' && (q == null || isNaN(q));
+    document.getElementById('bImpact').innerHTML = missing
+      ? bMissing([`没听出「${cur.name}」现在还剩几${cur.unit}`])
+      : impactBox([
+          `${cur.name}的记录更新为 ${cur.mode === 'count' ? q + ' ' + cur.unit : st}`,
+          (cur.mode === 'count' ? q < cur.min : ['快用完', '已用完'].includes(st))
+            ? '会低于约定水位，首页出现补充提醒' : '仍在约定水位以上，不会产生提醒',
+          '这次更新记在你名下，其他人能看到是谁什么时候改的',
+          '不会产生任何费用'
+        ]);
+    const go = sheetEl().querySelector('[data-act="doStock"]');
+    if (go) go.disabled = missing;
+  };
+  ['bs-n', 'bs-q', 'bs-s'].forEach(i => { const el = document.getElementById(i); if (el) el.addEventListener('input', upd); });
+  const sel = document.getElementById('bs-n');
+  if (sel) sel.addEventListener('change', () => { closeSheet(); butlerStock({ ...p, supply:S.supplies.find(x => x.id === sel.value) }); });
+  upd();
+}
+
+/* ---------- 买了公共用品 ---------- */
+function butlerBuy(p) {
+  const pub = S.supplies.filter(x => x.kind === 'public');
+  S.pending = { type:'buy' };
+  openSheet(`<h3>管家理解成这样</h3>
+    <p class="hint">这会同时改库存和账单，所以每一项都让你先核对、能改了再执行。</p>
+    <div class="bform">
+      ${bfield('bb-s', '买的是', `<select id="bb-s">
+        ${pub.map(x => `<option value="${x.id}" ${p.supply && x.id === p.supply.id ? 'selected' : ''}>${x.name}</option>`).join('')}
+        <option value="__new" ${p.supply ? '' : 'selected'}>其他（新增一项公共物品）</option></select>`)}
+      <div id="bb-newWrap" ${p.supply ? 'hidden' : ''}>${bfield('bb-name', '它叫什么', `<input type="text" id="bb-name" value="${esc(p.name || '')}" placeholder="例如：洗手液">`)}</div>
+      ${bfield('bb-q', '数量', `<input type="number" id="bb-q" min="1" value="${p.qty || ''}" inputmode="numeric" placeholder="买了几${p.unit || '件'}">`, '状态型物品（洗衣液这类只记档位的）可以留空')}
+      ${bfield('bb-a', '一共花了多少钱', `<input type="number" id="bb-a" min="0" step="0.01" value="${p.amount || ''}" inputmode="decimal" placeholder="没听清，请填金额">`, '留空就只更新库存、不记账')}
+      ${bfield('bb-p', '谁垫付的', `<select id="bb-p">${living().map(m =>
+        `<option value="${m.id}" ${m.id === ME ? 'selected' : ''}>${m.name}${m.id === ME ? '（你）' : ''}</option>`).join('')}</select>`)}
+      <div class="bf"><label>谁参与分摊</label><div class="who-pick" id="bb-w">${living().map(m =>
+        `<button type="button" data-m="${m.id}" aria-pressed="${(p.people || []).includes(m.id)}">${av(m.id, 'sm')}${m.name}</button>`).join('')}</div>
+        <em>点一下就能去掉某个人。说过"这次 Tom 不用分"的话，管家已经先去掉了。</em></div>
+    </div>
+    <div id="bPrev"></div>
+    <div id="bImpact"></div>
+    ${acts('doBuy', '确认并执行')}`);
+
+  const upd = () => {
+    const sid = document.getElementById('bb-s').value;
+    const cur = sid === '__new' ? null : S.supplies.find(x => x.id === sid);
+    document.getElementById('bb-newWrap').hidden = !!cur;
+    const name = cur ? cur.name : (document.getElementById('bb-name').value || '').trim();
+    const qv = document.getElementById('bb-q').value;
+    const q = qv === '' ? null : Math.max(1, parseInt(qv));
+    const av2 = document.getElementById('bb-a').value;
+    const amount = av2 === '' ? null : Math.max(0, parseFloat(av2));
+    const payer = document.getElementById('bb-p').value;
+    const people = [...sheetEl().querySelectorAll('#bb-w button[aria-pressed="true"]')].map(b => b.dataset.m);
+    const stateMode = cur && cur.mode === 'state';
+
+    const missing = [];
+    if (!name) missing.push('没听出买的是什么');
+    if (!stateMode && (q == null || isNaN(q))) missing.push('没听出买了几件');
+    if (amount == null || isNaN(amount)) missing.push('没听出花了多少钱');
+    if (!people.length) missing.push('至少要有一个人参与分摊');
+
+    /* 预览里每个人的金额，就是确认后真正写进账单的金额 */
+    const cents = amount ? splitCents(Math.round(amount * 100), people) : null;
+    document.getElementById('bPrev').innerHTML = missing.length ? '' : understandBox('每个人分多少', [
+      ...people.map(x => uline(`${av(x, 'sm')}${mem(x).name}`, yuan(cents[x] / 100))),
+      uline('<span style="color:var(--ink-3);font-weight:400">合计</span>', yuan(Object.values(cents).reduce((a, c) => a + c, 0) / 100))
+    ]);
+    document.getElementById('bImpact').innerHTML = missing.length ? bMissing(missing) : impactBox([
+      stateMode ? `${name}状态更新为充足` : cur ? `${name}库存 ${cur.qty} → ${cur.qty + q} ${cur.unit}` : `新增公共物品「${name}」，库存 ${q} 件`,
+      cur && !stateMode && cur.qty + q >= cur.min ? '首页的库存不足提醒会消失'
+        : cur && !stateMode ? '库存仍低于提醒水位，提醒会保留' : '会按新物品的默认水位提醒',
+      `账单新增一笔 ${yuan(amount)}，由 ${mem(payer).name} 垫付，${people.length} 人分摊`,
+      people.length < living().length ? `${living().filter(m => !people.includes(m.id)).map(m => m.name).join('、')} 这次不参与分摊` : '所有在住成员都参与分摊',
+      '每个人的那一份要各自标记已付、由垫付人确认收到，才算结清'
+    ]);
+    S.pending = { type:'buy', supplyId: cur ? cur.id : null, name, qty:q, unit: cur ? cur.unit : '件',
+      amount, payer, people, stateMode };
+    const go = sheetEl().querySelector('[data-act="doBuy"]');
+    if (go) go.disabled = missing.length > 0;
+  };
+  ['bb-name', 'bb-q', 'bb-a'].forEach(i => document.getElementById(i).addEventListener('input', upd));
+  document.getElementById('bb-p').addEventListener('change', upd);
+  document.getElementById('bb-s').addEventListener('change', upd);
+  sheetEl().querySelectorAll('#bb-w button').forEach(b => b.addEventListener('click', () => {
+    b.setAttribute('aria-pressed', b.getAttribute('aria-pressed') === 'true' ? 'false' : 'true'); upd();
+  }));
+  upd();
+}
+
+/* ---------- 离家 ---------- */
+function butlerAway(p) {
+  const from = p.fromDn != null ? p.fromDn : null, to = p.toDn != null ? p.toDn : null;
+  S.pending = { type:'away' };
+  openSheet(`<h3>管家理解成这样</h3>
+    <p class="hint">离家会影响值日、采购和费用分摊，日期一定要对，所以让你先确认。</p>
+    <div class="bform">
+      ${bfield('ba-f', '从哪天开始', `<select id="ba-f"><option value="">${from == null ? '没听出开始日期，请选一个' : ''}</option>${dayOpts(from, 0, 45)}</select>`)}
+      ${bfield('ba-t', '到哪天结束', `<select id="ba-t"><option value="">${to == null ? '没听出结束日期，请选一个' : ''}</option>${dayOpts(to, 0, 75)}</select>`)}
+    </div>
+    <div id="bImpact"></div>
+    ${acts('doAway', '确认离家')}`);
+  if (from == null) document.getElementById('ba-f').value = '';
+  if (to == null) document.getElementById('ba-t').value = '';
+  const upd = () => {
+    const f = parseInt(document.getElementById('ba-f').value), t = parseInt(document.getElementById('ba-t').value);
+    const missing = [];
+    if (isNaN(f)) missing.push('没听出从哪天开始');
+    if (isNaN(t)) missing.push('没听出到哪天结束');
+    if (!isNaN(f) && !isNaN(t) && t < f) missing.push('结束日期不能早于开始日期');
+    const days = (!isNaN(f) && !isNaN(t) && t >= f) ? t - f + 1 : 0;
+    const affected = S.tasks.filter(x => x.who === ME && !x.done && x.dueDn >= f && x.dueDn <= t).length;
+    document.getElementById('bImpact').innerHTML = missing.length ? bMissing(missing) : impactBox([
+      `登记离家 ${fmtDn(f)} — ${fmtDn(t)}，共 ${days} 天`,
+      `值日：这期间你的 ${affected} 项任务会暂缓，后续轮换补偿`,
+      '公共采购：这段时间不会把采购任务分给你',
+      `费用：水电这类随使用变化的费用可以按在住天数分，你的登记在住天数会变成 ${Math.max(0, S.utilityForecast.days - days)} 天——但怎么分要大家确认，系统不会替你们改`,
+      '家里的状态和头像会显示为离家中'
+    ]);
+    S.pending = { type:'away', fromDn:f, toDn:t };
+    const go = sheetEl().querySelector('[data-act="doAway"]');
+    if (go) go.disabled = missing.length > 0;
+  };
+  document.getElementById('ba-f').addEventListener('change', upd);
+  document.getElementById('ba-t').addEventListener('change', upd);
+  upd();
 }
 
 /* ============================================================
@@ -328,6 +496,25 @@ const AWK_SUGGEST = {
   '分区边界': '冰箱、储物柜、置物架和鞋柜按现有分区使用，需要调整先在家里说一声。',
   '借用方式': '可借物品按主人写下的方式使用，用后归位。'
 };
+
+/* 哪些写法会让人一眼看出是谁提的 */
+function anonHints(text, a) {
+  const out = [];
+  const names = MEMBERS.filter(m => text.includes(m.name)).map(m => m.name);
+  if (names.length) out.push(`出现了成员名字「${names.join('、')}」`);
+  if (/我的|我们房|我房间|0\d室/.test(text)) out.push('出现了房间或"我的…"这类指向本人的说法');
+  if (a && a.guestId && text.includes((a.guestId.split(':')[1] || ''))) out.push('出现了具体访客的称呼');
+  if (/昨天|今天早上|刚才/.test(text)) out.push('出现了很具体的时间点，容易对上是谁在场');
+  return out;
+}
+/* 把指名道姓的说法换成描述事情本身的说法 */
+function anonClean(text) {
+  let t = text;
+  MEMBERS.forEach(m => { t = t.replace(new RegExp(m.name, 'g'), '有室友'); });
+  t = t.replace(/有室友的/g, '某位室友的').replace(/(有室友)+/g, '有室友');
+  t = t.replace(/我的|我们房|我房间/g, '个人').replace(/昨天|今天早上|刚才/g, '最近');
+  return t;
+}
 
 function awkwardSheet() {
   const a = S.awk;
@@ -458,20 +645,41 @@ function awkwardSheet() {
               '如果之后登记情况真的超出约定，管家会主动提醒你', '你随时可以回来改成其他处理方式']
     };
 
+    /* 不点名 ≠ 没人猜得到：发起前让用户看到别人实际会看到的那段话，并且可以改掉会暴露自己的描述 */
+    const anon = ['house', 'rule', 'clarify'].includes(a.way);
+    const anonText = a.anonText != null ? a.anonText
+      : (a.way === 'clarify' ? `${existing ? existing.desc : a.focus}${gap ? ' 当前情况：' + gap.text : ''}`
+        : (AWK_SUGGEST[a.focus] || `关于${a.focus}的约定，等待大家一起确认。`));
+    const risky = anonHints(anonText, a);
+
     return openSheet(`
       <h3>${WAY[a.way]}</h3>
       <p class="hint">${a.way === 'private'
         ? '下面这段话去掉了情绪和指责，只说事实和你的想法。发出前你可以再改。'
         : '确认之前，先看清楚这一步会产生什么。'}</p>
       ${a.way === 'private'
-        ? `<div class="fld"><label>整理后的表达</label><textarea id="awkFinal">${draft}</textarea></div>`
+        ? `<div class="fld"><label>整理后的表达</label><textarea id="awkFinal">${draft}</textarea></div>
+           <div class="privacy">${svg(I.lock)}<div><b>这段话只有收件人能看到</b>
+             <span>不会进家里动态，也不会出现在讨论里。但对方知道是你发的——私下沟通本来就不是匿名的。</span></div></div>`
         : understandBox('将要做的事', [
             uline('针对', a.focus),
             existing ? uline('对应约定', existing.title) : uline('现有约定', '暂无'),
             gap ? uline('当前情况', `<span style="font-weight:400;font-family:var(--f-b);text-align:right">${gap.text}</span>`) : '',
             uline('处理方式', WAY[a.way]),
-            uline('署名', '不显示发起人')
+            uline('署名', anon ? '不显示发起人' : '显示发起人')
           ].filter(Boolean))}
+
+      ${anon ? `
+      <div class="anonbox">
+        <div class="an-h">${svg(I.shield)}<b>别人会看到这些</b><span>发起人不显示，但内容本身可能让人猜到是谁</span></div>
+        <div class="fld"><label for="anonT">议题里会出现的文字（可以改）</label><textarea id="anonT" rows="3">${esc(anonText)}</textarea></div>
+        ${risky.length ? `<div class="an-warn">${svg(I.alert)}<div><b>这几处可能暴露你的身份</b>
+          <span>${risky.join('；')}。要不要改成不指向具体某个人的说法？</span>
+          <button class="btn sm" data-act="anonClean">帮我改成中性说法</button></div></div>`
+          : `<div class="an-ok">${svg(I.check)}<span>目前这段文字里没有出现成员名字、房间号或只有你知道的细节。</span></div>`}
+        <div class="an-f">${svg(I.info)}<span>Roomly 不承诺绝对匿名：室友之间人很少，谁最近在意什么，彼此多少能猜到。
+          这里能做到的是——<b>系统不显示发起人、不记录到家里动态</b>，剩下的由你决定要写多少。</span></div>
+      </div>` : ''}
       ${a.way === 'rule' ? `<div class="suggest" style="margin-bottom:14px"><div class="sl">建议的约定</div><p>${sug}</p></div>` : ''}
       ${a.way === 'remind' ? `<div class="suggest" style="margin-bottom:14px"><div class="sl">管家会这样说</div>
         <p>本周登记的留宿次数已经超过大家之前约定的范围，需要一起确认一下后面的安排吗？</p></div>` : ''}
@@ -511,7 +719,7 @@ function memberSheet(id) {
   const lend = S.supplies.filter(s => s.kind === 'lend' && s.owner === id);
   openSheet(`<h3 style="display:flex;align-items:center;gap:10px">${av(id, 'xl')}<span>${m.name}${id === ME ? '（你）' : ''}</span></h3>
     <div class="vals" style="margin-top:6px">
-      <span class="val" style="padding-left:10px">状态 <b>${st === 'away' && a ? `登记离家中 · ${a.to} 回` : ms === 'pending' ? `${m.joined} 入住` : MEMBERSHIP_TEXT[ms]}</b></span>
+      <span class="val" style="padding-left:10px">状态 <b>${st === 'away' && a ? `登记离家中 · ${fmtDn(a.toDn)} 回` : ms === 'pending' ? `${m.joined} 入住` : MEMBERSHIP_TEXT[ms]}</b></span>
       <span class="val" style="padding-left:10px">房间 <b>${m.room}</b></span>
       <span class="val" style="padding-left:10px">入住 <b>${m.joined}</b></span>
     </div>
@@ -602,7 +810,7 @@ function restockSheet(id) {
                                : `${s.state} → ${sheetEl().querySelector('#rs button[aria-pressed="true"]').dataset.v}`) +
       uline('付款人', `${av(ME, 'sm')}${mem(ME).name}`) +
       uline('参与分摊', living().map(x => av(x.id, 'sm')).join('')) +
-      uline('每人承担', a > 0 ? `<span style="color:var(--jade)">${yuan(a / living().length)}</span>` : '不产生费用');
+      uline('每人承担', a > 0 ? `<span style="color:var(--jade)">${yuan(splitCents(Math.round(a * 100), living().map(x => x.id))[ME] / 100)}</span>` : '不产生费用');
   };
   if (s.mode === 'count') document.getElementById('rq').addEventListener('input', upd);
   else sheetEl().querySelectorAll('#rs button').forEach(b => b.addEventListener('click', () => {
@@ -636,7 +844,8 @@ function repairSheet() {
     <div class="fld"><label for="rpp">问题位置</label><select id="rpp">
       <option>厨房</option><option>卫生间</option><option>门锁</option><option>家电</option><option>其他</option></select></div>
     <div class="fld"><label for="rpd">问题描述</label><input type="text" id="rpd" placeholder="例如：厨房灯不亮了"></div>
-    ${impactBox(['生成一张报修单，状态为「已提交」', '租房中介受理后状态会自动更新', '维修安排会显示在生活页和我的页', '这次提交会记进家里动态'])}
+    ${impactBox(['生成一张报修单，状态为「已提交」', '租房中介受理后状态会自动更新（演示环境里这一步是模拟的）',
+                 '维修安排会显示在生活页和我的页', '这次提交会记进家里动态'])}
     ${acts('doRepair', '提交报修')}`);
 }
 
@@ -712,8 +921,10 @@ function editBillSheet(id) {
   const upd = () => {
     const a = parseFloat(document.getElementById('eb-a').value) || 0;
     const ppl = [...sheetEl().querySelectorAll('#eb-w button[aria-pressed="true"]')].map(x => x.dataset.m);
+    const c = splitCents(Math.round(a * 100), ppl);
     document.getElementById('eb-prev').innerHTML =
-      ppl.map(p => uline(mem(p).name, yuan(a / (ppl.length || 1)))).join('') ||
+      (ppl.map(p => uline(mem(p).name, yuan(c[p] / 100))).join('') +
+        (ppl.length ? uline('<span style="color:var(--ink-3);font-weight:400">合计</span>', yuan(a)) : '')) ||
       uline('提示', '至少选择一位成员');
   };
   upd();
@@ -730,9 +941,9 @@ function editAwaySheet(id) {
   const a = S.away.find(x => x.id === id);
   openSheet(`<h3>修改离家登记</h3>
     <p class="hint">改完之后，值日暂缓范围和登记在住天数都会跟着重新计算。</p>
-    <div class="fld"><label for="ea-f">开始</label><input type="text" id="ea-f" value="${a.from}"></div>
-    <div class="fld"><label for="ea-t">结束</label><input type="text" id="ea-t" value="${a.to}"></div>
-    <div class="fld"><label for="ea-d">天数</label><input type="number" id="ea-d" min="1" value="${a.days}"></div>
+    <div class="fld"><label for="ea-f">开始</label><select id="ea-f">${dayOpts(a.fromDn, -3, 30)}</select></div>
+    <div class="fld"><label for="ea-t">结束</label><select id="ea-t">${dayOpts(a.toDn, -3, 60)}</select></div>
+    <div class="srctag">共 ${awayDays(a)} 天。改完之后，值日暂缓范围和登记在住天数都会跟着重新算。</div>
     <div class="acts">
       <button class="btn danger" data-act="delAway" data-id="${a.id}">取消这次离家计划</button>
       <button class="btn" data-act="close">返回</button>
@@ -745,7 +956,7 @@ function editVisitSheet(id) {
   const o = overnightRule();
   openSheet(`<h3>修改访客登记</h3>
     <p class="hint">改了日期或留宿信息，本周留宿次数和约定判断都会重新算。</p>
-    <div class="fld"><label for="ev-d">日期</label><input type="text" id="ev-d" value="${v.date}"></div>
+    <div class="fld"><label for="ev-d">日期</label><select id="ev-d">${dayOpts(v.dn, -7, 14)}</select></div>
     <div class="fld"><label for="ev-t">到访时间</label><input type="text" id="ev-t" value="${v.time}"></div>
     <div class="fld"><label>是否留宿</label><div class="who-pick" id="ev-o">
       <button type="button" data-v="0" aria-pressed="${!v.overnight}">不留宿</button>
@@ -819,7 +1030,7 @@ function taskSheet() {
     <div class="fld"><label for="nw">负责人</label><select id="nw">${living().map(m =>
       `<option value="${m.id}" ${m.id === ME ? 'selected' : ''}>${m.name}${m.id === ME ? '（你）' : ''}</option>`).join('')}</select></div>
     <div class="fld"><label for="nd">时间</label><select id="nd">
-      <option>今天</option><option>本周内</option><option>周日</option></select></div>
+      <option value="0">今天</option><option value="1">明天</option><option value="week">本周内</option></select></div>
     ${acts('doTask', '添加')}`);
 }
 
@@ -849,15 +1060,13 @@ function billSheet() {
     const method = kind === 'utility' ? document.getElementById('bm').value : 'even';
     let lines = '';
     if (method === 'days') {
-      const rows = people.map(id => {
-        const off = S.away.filter(x => x.who === id).reduce((n, x) => n + x.days, 0);
-        return { id, days: 30 - off, off };
-      });
-      const tot = rows.reduce((n, r) => n + r.days, 0) || 1;
+      const rows = people.map(id => ({ id, days: Math.max(0, S.utilityForecast.days - awayDaysOf(id)) }));
+      const cents = splitCents(Math.round(a * 100), people, Object.fromEntries(rows.map(r => [r.id, r.days])));
       lines = rows.map(r => uline(`${mem(r.id).name}<span style="font-weight:400;color:var(--ink-3)"> ${r.days} 天</span>`,
-        yuan(a * r.days / tot))).join('');
+        yuan(cents[r.id] / 100))).join('');
     } else {
-      lines = people.map(id => uline(mem(id).name, yuan(a / (people.length || 1)))).join('');
+      const ce = splitCents(Math.round(a * 100), people);
+      lines = people.map(id => uline(mem(id).name, yuan(ce[id] / 100))).join('');
     }
     document.getElementById('bPrev').innerHTML = lines || uline('提示', '至少选择一位成员');
   };
@@ -882,7 +1091,7 @@ function visitSheet(presetOvernight) {
       <div class="who-pick" id="vgs" style="margin-top:7px"></div>
       <div class="srctag">不需要真实姓名，只是为了分清是不是同一个人：同一个称呼就按同一位访客累计</div></div>
     <div class="fld"><label for="vd">日期</label><select id="vd">
-      <option>今天</option><option>明天</option><option>后天</option></select></div>
+      <option value="0">今天</option><option value="1">明天</option><option value="2">后天</option></select></div>
     <div class="fld"><label for="vw">到访时间</label><input type="text" id="vw" value="19:00–22:00"></div>
     <div class="fld"><label>是否留宿</label><div class="who-pick" id="vo">
       <button type="button" data-v="0" aria-pressed="${!presetOvernight}">不留宿</button>
@@ -905,15 +1114,19 @@ function visitSheet(presetOvernight) {
     const add = on ? (parseInt(document.getElementById('vn').value) || 1) : 0;
     document.getElementById('vnWrap').hidden = !on;
     chips();
-    const had = nightsOf(host, guestKey(host, guest)), n = had + add;
+    const ck = stayCheck(host, guestKey(host, guest), add);
+    const over = ck.total - ck.allow;
     document.getElementById('vCheck').innerHTML = !on ? `
       <div class="notice">${svg(I.info)}<span>普通到访只需要告知其他室友，不需要征求同意。</span></div>`
-      : n <= o.limit ? `
+      : !ck.over ? `
       <div class="notice" style="background:var(--jade-soft);color:var(--jade-ink)">${svg(I.check)}<span>
-        ${mem(host).name} 的「${guest}」本周已登记 ${had} 晚，加上这次共 ${n} 晚，仍在约定的每周 ${o.limit} 晚之内。</span></div>`
-      : `<div class="fair"><div class="fh">${svg(I.info)}这次登记会超过现在的约定</div>
-        <p>${mem(host).name} 的「${guest}」本周已登记 ${had} 晚，加上这次共 ${n} 晚，超过约定的每周 ${o.limit} 晚。
-           这不会被禁止，但建议先征求其他室友的意见。</p></div>`;
+        ${mem(host).name} 的「${guest}」本周已登记 ${ck.had} 晚，加上这次共 ${ck.total} 晚，仍在${
+          ck.extra ? `约定 ${ck.limit} 晚 + 已批准例外 ${ck.extra} 晚` : `约定的每周 ${ck.limit} 晚`}之内。</span></div>`
+      : `<div class="fair"><div class="fh">${svg(I.info)}超出的 ${over} 晚要先申请一次例外</div>
+        <p>${mem(host).name} 的「${guest}」本周已登记 ${ck.had} 晚，加上这次共 ${ck.total} 晚，超过可接受的 ${ck.allow} 晚${
+          ck.extra ? `（约定 ${ck.limit} 晚 + 已批准例外 ${ck.extra} 晚）` : `（约定每周 ${ck.limit} 晚）`}。
+          ${over < add ? `其中 ${add - over} 晚会直接登记，` : ''}超出的 ${over} 晚<b>不会先记上</b>，
+          而是作为一次临时例外请室友分别回应，全部同意之后才正式登记。长期约定不会因此改变。</p></div>`;
   };
   upd();
   document.getElementById('vn').addEventListener('input', upd);
@@ -925,12 +1138,48 @@ function visitSheet(presetOvernight) {
   }));
 }
 
+/* ---------- 长期规则下的临时例外 ----------
+   用户不反对约定，只是这一次需要突破。申请要说清楚：哪位访客、几晚、到什么时候。
+   批准之前这几晚不会计入留宿记录；批准之后只记一次；到期自动失效，约定本身不变。 */
+function exceptionSheet(pre) {
+  const o = overnightRule();
+  const d = pre || (() => {
+    const p = (o.pairs || [])[0] || { host:ME, guest:'朋友', guestId:guestKey(ME, '朋友') };
+    const ck = stayCheck(p.host, p.guestId, 0);
+    return { host:p.host, guest:p.guest, guestId:p.guestId, nights:1, fromDn:dnNow(),
+      toDn:weekEndDn(dnNow()), had:ck.had, limit:ck.limit, extra:ck.extra, registered:0 };
+  })();
+  const toDn = Math.max(d.fromDn, weekEndDn(dnNow()));
+  const need = living().map(m => m.id).filter(x => x !== (d.host || ME));
+  openSheet(`<h3>申请一次临时例外</h3>
+    <p class="hint">你不是要改掉「${o.rule.title}」，只是这一次需要多一点空间。约定本身不会变，例外到期自动失效。</p>
+    ${understandBox('这次申请', [
+      uline('访客', `${mem(d.host).name} 登记的「${d.guest}」`),
+      uline('本周已登记', `${d.had} 晚${d.extra ? ` + 已批准例外 ${d.extra} 晚` : ''}`),
+      uline('现有约定', `同一访客每周最多 ${d.limit} 晚`),
+      d.registered ? uline('直接登记', `${d.registered} 晚（仍在约定内）`) : '',
+      uline('本次申请', `<span style="color:var(--peach)">额外 ${d.nights} 晚</span>`),
+      uline('有效期', `${fmtDn(d.fromDn)} — ${fmtDn(toDn)}（本周结束即失效）`)
+    ].filter(Boolean))}
+    <div class="fld"><label for="xn">额外留宿几晚</label><input type="number" id="xn" min="1" max="5" value="${d.nights}" inputmode="numeric"></div>
+    <div class="fld"><label for="xr">想说明一下原因吗（可留空）</label>
+      <input type="text" id="xr" value="${pre && pre.reason || ''}" placeholder="例如：她这几天项目赶工，住得近一点"></div>
+    ${impactBox([
+      `发给 ${need.map(x => mem(x).name).join('、') || '其他在住成员'}，每个人分别回应，你不能替别人同意`,
+      '全部同意之前，这几晚<b>不会</b>计入留宿记录，也不会显示成已超出约定',
+      '全部同意之后这几晚正式登记，只记一次，不会既算例外又算一次超限',
+      `${fmtDn(toDn)} 之后例外自动失效，「${o.rule.title}」原样生效`,
+      '如果你觉得这种情况以后会经常发生，可以把它转成对约定本身的讨论'
+    ])}
+    ${acts('doException', '发出申请')}`);
+  sheetEl().dataset.ex = JSON.stringify({ ...d, toDn });
+}
+
 function awaySheet() {
   openSheet(`<h3>登记离家计划</h3>
     <p class="hint">临时外出、请假不在家用这个。登记之后，值日、公共采购和水电分摊都会跟着调整；正式搬出请走「搬出与退租」。</p>
-    <div class="fld"><label for="af">开始</label><input type="text" id="af" value="9月16日"></div>
-    <div class="fld"><label for="at">结束</label><input type="text" id="at" value="9月20日"></div>
-    <div class="fld"><label for="ad">天数</label><input type="number" id="ad" value="5" min="1"></div>
+    <div class="fld"><label for="af">开始</label><select id="af">${dayOpts(dnNow() + 4, 0, 30)}</select></div>
+    <div class="fld"><label for="at">结束</label><select id="at">${dayOpts(dnNow() + 8, 0, 60)}</select></div>
     ${impactBox(['期间你的值日任务会暂缓，后续轮换补偿', '这段时间不会分配公共采购任务给你',
                  '月末水电可按实际居住天数计算', '家里的状态显示为离家中'])}
     ${acts('doAway2', '确认离家')}`);
@@ -971,7 +1220,9 @@ function stewardSheet(id) {
       uline('当前诉求', '希望协助组织一次标准确认')
     ])}
     <div class="notice" style="margin-bottom:14px">${svg(I.info)}<span>摘要中不包含任何成员的姓名和具体行为描述。</span></div>
-    ${acts('doSteward', '提交给管家')}`, true);
+    <div class="notice" style="margin-bottom:14px">${svg(I.alert)}<span>演示环境不会真的发送给机构：确认后会生成一条<b>模拟工单</b>，你可以在问题记录里看到它的状态和回复。</span></div>
+    ${acts('doSteward', '提交给管家（模拟）')}`, true);
+  if (it) sheetEl().dataset.iid = it.id;
 }
 
 function clarifySheet(id) {

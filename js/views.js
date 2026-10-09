@@ -16,24 +16,48 @@ const backBtn = (label, tab) =>
 const head = (h1, p) => `<div class="phead"><h1>${h1}</h1>${p ? `<p>${p}</p>` : ''}</div>`;
 const sec  = (t, sub, extra) =>
   `<div class="sechead"><h2>${t}</h2>${extra || (sub ? `<span class="sub">${sub}</span>` : '')}</div>`;
-/* 请求卡片：发起人、接收人、时间、状态、结果一应俱全 */
-function reqCard(r, mine) {
-  const done = r.status !== 'pending';
-  return `<div class="card pad ${done ? 'dim' : ''}">
+/* 请求卡片：谁发起、要谁回应、每个人分别怎么说、现在到哪一步。
+   需要回应的人没齐之前，不会显示成"已通过"。 */
+const REQ_PILL = { open:'warn', agreed:'ok', done:'ok', declined:'rose', discuss:'peach', cancelled:'plain', expired:'plain' };
+function reqCard(r, mineHint) {
+  const st = reqExpired(r) ? 'expired' : r.status;
+  const open = st === 'open';
+  const need = reqNeed(r), mine = r.from === ME, iNeed = need.includes(ME), myResp = reqResp(r, ME);
+  /* 每个人单独一行：谁同意了、谁还没说、谁不同意 */
+  const row = id => { const p = reqResp(r, id);
+    const k = !p ? 'none' : p.stance === 'agree' ? 'agree' : p.stance === 'decline' ? 'disagree' : 'undecided';
+    const txt = !p ? (open ? '等待回应' : '没有回应') : RESP_TEXT[p.stance];
+    return `<span class="tk-st ${k}">${av(id, 'sm')}${mem(id).name}${id === ME ? '（你）' : ''} · ${txt}</span>`; };
+  return `<div class="card pad ${open ? '' : 'dim'}">
     <div style="display:flex;gap:10px;align-items:flex-start">${av(r.from, 'lg')}
       <div style="flex:1">
         <b style="font-family:var(--f-d);font-size:15px">${mem(r.from).name}：${r.subject}</b>
         <div style="font-size:12.5px;color:var(--ink-3);margin-top:2px">${r.detail}</div>
-        <div class="srctag">${svg(I.info)}${REQ_LABEL[r.kind]}请求 · 发给${r.to === 'all' ? '全体室友' : mem(r.to).name} · ${r.at}</div>
+        <div class="srctag">${svg(I.info)}${REQ_LABEL[r.kind]}申请 · 发给${r.to === 'all' ? '全体室友' : mem(r.to).name} · ${r.at}${
+          open && r.expiresDn != null ? ` · ${fmtDn(r.expiresDn)} 前有效` : ''}</div>
       </div>
-      <span class="pill ${done ? (r.status === 'agreed' ? 'ok' : 'plain') : 'warn'}">${REQ_STATUS[r.status]}</span></div>
-    ${done ? `<div class="srctag">${svg(I.check)}${r.status === 'cancelled' ? (r.note || '本次请求已取消') + (r.resolvedAt ? ` · ${r.resolvedAt}` : '') : `${mem(r.by).name} 于 ${r.resolvedAt} 回应`}</div>`
-      : mine ? `<div class="btnrow" style="margin-top:10px">
-          <button class="btn sm" data-act="reqWithdraw" data-id="${r.id}">撤回请求</button></div>`
-      : `<div class="btnrow" style="margin-top:10px">
-          <button class="btn pri sm" data-act="reqAgree" data-id="${r.id}">可以</button>
-          <button class="btn sm" data-act="reqDecline" data-id="${r.id}">这次不太方便</button>
-          <button class="btn sm" data-act="reqDiscuss" data-id="${r.id}">想讨论一下</button></div>`}
+      <span class="pill ${REQ_PILL[st] || 'plain'}">${REQ_STATUS[st]}</span></div>
+
+    ${need.length ? `<div class="tk-stances" style="margin-top:10px">${need.map(row).join('')}</div>
+      <div class="srctag">${svg(I.check)}${reqProgress(r)}${open && reqWaiting(r).length ? ` · 还在等 ${reqWaiting(r).map(x => mem(x).name).join('、')}` : ''}</div>` : ''}
+
+    ${!open ? `<div class="srctag">${svg(I.info)}${
+        st === 'cancelled' ? (r.note || '已撤回') + (r.resolvedAt ? ` · ${r.resolvedAt}` : '')
+        : st === 'expired' ? '到截止时间没有收齐回应，已自动失效'
+        : st === 'declined' ? `有人这次不太方便，没有通过${r.resolvedAt ? ' · ' + r.resolvedAt : ''}`
+        : st === 'discuss' ? '已转为家里一起讨论'
+        : `需要的人都同意了${r.doneAt ? ' · ' + r.doneAt + ' 执行完成' : ''}`}</div>` : ''}
+
+    ${open && iNeed && !myResp ? `<div class="btnrow" style="margin-top:10px">
+        <button class="btn pri sm" data-act="reqAgree" data-id="${r.id}">可以</button>
+        <button class="btn sm" data-act="reqDecline" data-id="${r.id}">这次不太方便</button>
+        <button class="btn sm" data-act="reqDiscuss" data-id="${r.id}">想讨论一下</button></div>` : ''}
+    ${open && iNeed && myResp ? `<div class="srctag">${svg(I.check)}你已经回应过：${RESP_TEXT[myResp.stance]}。其他人还没齐之前不会生效。</div>` : ''}
+    ${open && mine ? `<div class="btnrow" style="margin-top:10px">
+        <button class="btn sm" data-act="reqWithdraw" data-id="${r.id}">撤回申请</button></div>` : ''}
+    ${st === 'declined' && mine ? `<div class="btnrow" style="margin-top:10px">
+        <button class="btn sm pri" data-act="reqToTopic" data-id="${r.id}">放到家里一起讨论</button>
+        <button class="btn sm" data-act="reqWithdraw" data-id="${r.id}">这次就算了</button></div>` : ''}
   </div>`;
 }
 
@@ -61,7 +85,7 @@ function vHome() {
 
   /* ---- 今日待办 ---- */
   const todos = [];
-  const t = S.tasks.find(x => x.who === ME && x.due === '今天' && !x.done);
+  const t = S.tasks.find(x => x.who === ME && !x.done && (taskToday(x) || taskOverdue(x)));
   if (t) todos.push(`<div class="tcard a"><span class="tic">${svg(I.chore)}</span>
       <div><div class="tt">${t.task}</div><div class="ts">按固定任务安排，今天轮到你</div></div>
       <div class="tb"><button class="btn pri sm" data-act="doneTask" data-id="${t.id}">${svg(I.check)}完成</button>
@@ -85,6 +109,18 @@ function vHome() {
       <div class="ts">${mineTalk.map(t => t.title).join(' · ')}</div></div>
       <div class="tb"><button class="btn pri sm" data-act="go" data-tab="talk">去表态</button></div></div>`);
 
+  const msgs = unreadMessages();
+  if (msgs.length) todos.push(`<div class="tcard c"><span class="tic">${svg(I.talk)}</span>
+      <div><div class="tt">${msgs.length} 条消息等你看</div>
+      <div class="ts">${msgs.slice(0, 2).map(m => m.title).join(' · ')}</div></div>
+      <div class="tb"><button class="btn pri sm" data-act="go" data-tab="me" data-sub="msg">去看看</button></div></div>`);
+
+  /* 我垫付的账里，有人说已经付了，等我确认 */
+  if (can('bills') && myToConfirm().length) todos.push(`<div class="tcard b"><span class="tic">${svg(I.check)}</span>
+      <div><div class="tt">有 ${myToConfirm().length} 笔等你确认收款</div>
+      <div class="ts">${myToConfirm().map(b => b.title).join(' · ')}</div></div>
+      <div class="tb"><button class="btn pri sm" data-act="go" data-tab="bill">去确认</button></div></div>`);
+
   const low = lowSupplies()[0];
   if (low && todos.length < 4) todos.push(`<div class="tcard c"><span class="tic">${svg(I.box)}</span>
       <div><div class="tt">${low.name}${low.mode === 'count' ? `只剩 ${low.qty} ${low.unit}` : low.state}</div>
@@ -94,7 +130,7 @@ function vHome() {
   /* ---- 成员一行：点开是成员小卡，只放家里本来就公开的信息 ---- */
   const people = household().map(m => {
     const st = statusOf(m.id), a = awayOf(m.id);
-    const tail = st === 'away' ? `${a.to} 回` : st === 'incoming' ? `${m.joined} 入住` : STATUS_TEXT[st];
+    const tail = st === 'away' ? `${fmtDn(a.toDn)} 回` : st === 'incoming' ? `${m.joined} 入住` : STATUS_TEXT[st];
     return `<div class="person ${m.id === ME ? 'me' : ''}" data-act="member" data-id="${m.id}" role="button" tabindex="0">
       ${av(m.id, 'xxl' + (st === 'in' ? '' : ' out'))}
       <div class="pn">${m.name}${m.id === ME ? '·你' : ''}</div>
@@ -130,7 +166,7 @@ function vHome() {
         ${watch.length ? `<div class="mtags">${watch.map(w => `<span>${w}</span>`).join('')}</div>` : ''}
         <div class="mglance">
           <span>${svg(I.guest)}今晚 ${tonightVisits().length} 位访客登记</span>
-          <span>${svg(I.chore)}${myTasks().filter(x => x.due === '今天').length} 项任务待完成</span>
+          <span>${svg(I.chore)}${myTasks().filter(x => taskToday(x) || taskOverdue(x)).length} 项任务待完成</span>
           <span>${svg(I.talk)}${mineTalk.length ? `${mineTalk.length} 项讨论等你表态` : houseTalk.length ? `${houseTalk.length} 项讨论进行中，你已表态` : '没有进行中的讨论'}</span>
         </div>
       </div>
@@ -140,8 +176,8 @@ function vHome() {
 
   <div class="hgrid2">
     <div>
-      ${sec('今日待办', todos.length ? `${Math.min(todos.length, 4)} 件` : '')}
-      ${todos.length ? `<div class="todos">${todos.slice(0, 4).join('')}</div>`
+      ${sec('今日待办', todos.length ? `${Math.min(todos.length, 5)} 件` : '')}
+      ${todos.length ? `<div class="todos">${todos.slice(0, 5).join('')}</div>`
         : '<div class="card empty">今天没有需要你处理的事。有新情况时，管家会主动提醒你。</div>'}
       ${butlerBox()}
     </div>
@@ -221,22 +257,22 @@ function vLife() {
     : t.who === ME ? '固定任务，这次轮到你' : `${mem(t.who).name} 负责`;
 
   const today = [];
-  S.tasks.filter(t => t.due === '今天').sort((a, b) => (a.done - b.done) || (b.who === ME) - (a.who === ME))
+  S.tasks.filter(t => taskToday(t) || (!t.done && taskOverdue(t))).sort((a, b) => (a.done - b.done) || (b.who === ME) - (a.who === ME))
     .forEach(t => today.push({ task:t, done:t.done, title:t.task, sub:taskSub(t) }));
   tonight.forEach(v => today.push({ tone:'sky', title:`${mem(v.host).name} 有访客`,
     sub:`${v.time} · ${v.overnight ? '留宿' : '不留宿'}` }));
   if (L.user) today.push({ tone:'sky', title:`${mem(L.user).name} 在用洗衣机`, sub:`预计 ${L.endsAt} 结束` });
 
-  const tomorrow = S.tasks.filter(t => t.due === TOMORROW.wd && !t.done)
+  const tomorrow = S.tasks.filter(t => !t.done && t.dueKind !== 'week' && t.dueDn === dnNow() + 1)
     .map(t => ({ task:t, title:t.task, sub:taskSub(t) }));
 
   const next = [];
   if (rp) next.push({ tone:'peach', title:rp.desc, sub:`${repairState(rp).s} · 租房中介` });
   next.push({ tone:'sage', title:'公区保洁', sub:`${HOUSE.clean.next} · 租房中介排期` });
   /* 负责人登记离家中的任务已暂缓，不算"会发生的事"，留在值日页里 */
-  S.tasks.filter(t => !t.done && !taskPaused(t) && !['今天', TOMORROW.wd].includes(t.due)).forEach(t => next.push({
-    task:t, title:t.task, sub:`${t.due} · ${mem(t.who).name} 负责` }));
-  away.forEach(a => next.push({ tone:'sage', title:`${mem(a.who).name} 回来`, sub:`${a.to} · 本人登记` }));
+  S.tasks.filter(t => !t.done && !taskPaused(t) && !taskToday(t) && !taskOverdue(t) && !(t.dueKind !== 'week' && t.dueDn === dnNow() + 1))
+    .forEach(t => next.push({ task:t, title:t.task, sub:`${taskDue(t)} · ${mem(t.who).name} 负责` }));
+  away.forEach(a => next.push({ tone:'sage', title:`${mem(a.who).name} 回来`, sub:`${fmtDn(a.toDn)} · 本人登记` }));
   if (inc) next.push({ tone:'peach', title:`${inc.name} 入住 ${inc.room}`, sub:`${inc.joined} · 租房中介同步` });
 
   const col = (title, date, list, empty) => `<div class="agcol">
@@ -255,8 +291,8 @@ function vLife() {
 
   const guestAv = v => `<span class="av gav" title="${mem(v.host).name}的${v.guest}">${
     v.guestPhoto ? `<img src="${v.guestPhoto}" alt="" onerror="this.remove()">` : ''}客</span>`;
-  const weekVisits = S.visits.filter(v => v.week);
-  const guests = tonight.length ? tonight : weekVisits.slice(0, 1);
+  const wVisits = weekVisits();
+  const guests = tonight.length ? tonight : wVisits.slice(0, 1);
 
   const lend = S.supplies.filter(s => s.kind === 'lend');
   const dutyPeople = [...new Set(S.tasks.filter(t => !t.done).map(t => t.who))];
@@ -309,7 +345,7 @@ function vLife() {
         <button class="av gav add" data-act="newVisit" aria-label="登记访客">${svg(I.plus)}</button></div>
       <div class="lcbig">${tonight.length ? `${mem(tonight[0].host).name} 今晚有访客` : '今晚没有访客登记'}</div>
       <div class="lcsub">${tonight.length ? `${tonight[0].time} · ${tonight[0].overnight ? '留宿' : '不留宿'}` : '有朋友来提前说一声就好'}</div>
-      <div class="lcnote">${stayReq.length ? `<b>${stayReq.length} 条留宿请求等你回应</b>` : `本周已登记 ${weekVisits.length} 次到访`}</div>
+      <div class="lcnote">${stayReq.length ? `<b>${stayReq.length} 条留宿申请等你回应</b>` : `本周已登记 ${wVisits.length} 次到访`}</div>
       <footer>${go('guest', '访客记录')}</footer>
     </article>
 
@@ -336,7 +372,7 @@ function vLife() {
       <div class="lpeople">${household().map(m => {
         const st = statusOf(m.id), a = awayOf(m.id);
         return `<div class="lp ${st}">${av(m.id, 'xl' + (st === 'in' ? '' : ' out'))}
-          <b>${m.name}${m.id === ME ? '·你' : ''}</b><span>${st === 'away' ? a.to + ' 回' : st === 'incoming' ? m.joined + ' 入住' : STATUS_TEXT[st]}</span></div>`; }).join('')}</div>
+          <b>${m.name}${m.id === ME ? '·你' : ''}</b><span>${st === 'away' ? fmtDn(a.toDn) + ' 回' : st === 'incoming' ? m.joined + ' 入住' : STATUS_TEXT[st]}</span></div>`; }).join('')}</div>
       <footer>${myAway
         ? `<button class="btn sm" data-act="cancelAway" data-id="${myAway.id}">我提前回来了</button>`
         : `<button class="btn sm" data-act="newAway">登记我的离家</button>`}${go('away', '详情')}</footer>
@@ -381,7 +417,7 @@ function vChore() {
     return `<div class="row ${t.done ? 'dim' : ''}">
       <div class="main">
         <div class="ttl">${t.task}
-          <span class="pill ${t.done ? 'ok' : t.due === '今天' ? 'warn' : 'plain'}">${t.done ? '已完成' : t.due}</span>
+          <span class="pill ${t.done ? 'ok' : taskToday(t) || taskOverdue(t) ? 'warn' : 'plain'}">${t.done ? '已完成' : taskDue(t)}</span>
           ${paused ? '<span class="pill plain">登记离家中，已暂缓</span>' : ''}
         </div>
         <div class="meta">${mem(t.who).name}${t.who === ME ? '（你）' : ''}
@@ -430,8 +466,9 @@ function vChore() {
             <span class="cv">${load[m.id]} 项</span></span>
         </div>`).join('')}
       <p style="font-size:13px;color:var(--ink-2);margin-top:11px;line-height:1.6">
-        由 ${S.completions.length} 条完成记录统计得出。Tom 登记了 9月8日—9月18日 离家，这期间的任务由其他人承担，
-        后续轮换会自动补偿回来。除此之外，当前责任分布整体均衡。</p>
+        由 ${S.completions.length} 条完成记录统计得出。${awayMembers().length
+          ? `${awayMembers().map(a => `${mem(a.who).name} 登记了 ${fmtDn(a.fromDn)}—${fmtDn(a.toDn)} 离家`).join('；')}，这期间的任务由其他人承担，后续轮换会自动补偿回来。`
+          : '当前没有人登记离家。'}除此之外，当前责任分布整体均衡。</p>
       ${srcTag({ via:'derived', note:`来自 ${S.completions.length} 条任务完成记录` })}
     </div>`;
 }
@@ -556,7 +593,7 @@ function vSpace() {
 /* ---------- 访客 ---------- */
 function vGuest() {
   const o = overnightRule();
-  const week = S.visits.filter(v => v.week);
+  const week = weekVisits();
   return `
     ${backBtn('生活', 'life')}
     ${head('访客', '普通到访只要说一声；留宿会对照现在的约定，超过了也不是禁止，而是先问问大家。')}
@@ -565,16 +602,23 @@ function vGuest() {
       <div class="stack">${inboxRequests().map(r => reqCard(r)).join('')}</div>` : ''}
     ${myRequests().filter(r => r.kind === 'stay').length ? `${sec('我发出的请求')}
       <div class="stack">${myRequests().filter(r => r.kind === 'stay').map(r => reqCard(r, true)).join('')}</div>` : ''}
+    ${exBlock()}
+
     ${sec('本周访客登记', `${week.length} 条记录`, `<button class="btn pri sm" data-act="newVisit">${svg(I.plus)}登记访客</button>`)}
-    <div class="card rows">${S.visits.length ? S.visits.map(v => `
+    <div class="card rows">${S.visits.length ? S.visits.map(v => {
+      const ex = v.exId && S.exceptions.find(x => x.id === v.exId);
+      return `
       <div class="row"><div class="main">
         <div class="ttl">${mem(v.host).name} 的${v.guest}
-          <span class="pill ${v.overnight ? 'info' : 'plain'}">${v.overnight ? '留宿' : '不留宿'}</span></div>
-        <div class="meta">${v.date} · ${v.time}</div>
+          <span class="pill ${v.overnight ? 'info' : 'plain'}">${v.overnight ? '留宿' : '不留宿'}</span>
+          ${ex ? `<span class="pill sky">经同意的例外</span>` : ''}
+          ${sameWeek(v.dn) ? '' : '<span class="pill plain">往周记录</span>'}</div>
+        <div class="meta">${relDn(v.dn)}（${fmtDn(v.dn)} ${wdOfDn(v.dn)}） · ${v.time}</div>
+        ${ex ? `<div class="meta">这一晚来自 ${fmtDn(ex.fromDn)}—${fmtDn(ex.toDn)} 的临时例外，${(ex.approvedBy || []).map(x => mem(x).name).join('、')} 都同意过；只计一次，不会再判成超出约定</div>` : ''}
         ${srcTag(v.src)}</div>
         <div class="right">${av(v.host)}</div>
-        ${v.host === ME ? `<div class="cta"><button class="btn sm" data-act="editVisit" data-id="${v.id}">修改</button></div>` : ''}
-      </div>`).join('')
+        ${v.host === ME && !ex ? `<div class="cta"><button class="btn sm" data-act="editVisit" data-id="${v.id}">修改</button></div>` : ''}
+      </div>`; }).join('')
       : '<div class="empty">本周还没有访客登记</div>'}</div>
 
     ${sec('留宿次数是怎么算出来的')}
@@ -592,6 +636,45 @@ function vGuest() {
     </div>`;
 }
 
+/* 临时例外：把"正常登记 / 待批准申请 / 已批准例外 / 被取消的申请"四种状态分清楚 */
+const EX_PILL = { pending:'warn', approved:'ok', rejected:'rose', cancelled:'plain', expired:'plain' };
+function exBlock() {
+  const mine = S.exceptions.filter(e => e.host === ME || can('visits'));
+  const live = mine.filter(e => ['pending', 'approved'].includes(e.status));
+  const past = mine.filter(e => !['pending', 'approved'].includes(e.status)).slice(0, 3);
+  const o = overnightRule();
+  const card = e => {
+    const r = S.requests.find(x => x.id === e.reqId);
+    return `<div class="card pad exc ${e.status}">
+      <div class="ex-h"><span class="ex-i">${svg(I.guest)}</span>
+        <div><b>${mem(e.host).name} 的「${e.guest}」· 额外 ${e.nights} 晚</b>
+          <span>${fmtDn(e.fromDn)} — ${fmtDn(e.toDn)}${e.reason ? ' · ' + e.reason : ''}</span></div>
+        <span class="pill ${EX_PILL[e.status]}">${EX_STATUS[e.status]}</span></div>
+      <p class="ex-p">${e.status === 'pending'
+        ? `这是一次<b>临时例外申请</b>，不改动「${o.rule.title}」。批准之前这 ${e.nights} 晚<b>不计入</b>留宿记录。${r ? reqProgress(r) : ''}${r && reqWaiting(r).length ? ` · 还在等 ${reqWaiting(r).map(x => mem(x).name).join('、')}` : ''}`
+        : e.status === 'approved'
+          ? `已生效：${(e.approvedBy || []).map(x => mem(x).name).join('、')} 都同意了。这 ${e.nights} 晚已经正式登记（只记一次），到 ${fmtDn(e.toDn)} 自动失效，之后仍按原约定执行。`
+        : e.status === 'rejected' ? '这次没有全部同意，这几晚没有登记，长期约定也没有变化。'
+        : e.status === 'expired' ? '已经到期失效。已经登记过的那几晚留在记录里，上限回到原来的约定。'
+        : (e.note || '已撤回，没有产生任何登记。')}</p>
+      ${e.status === 'pending' && e.host === ME ? `<div class="btnrow">
+        <button class="btn sm" data-act="cancelException" data-id="${e.id}">撤回申请</button>
+        <button class="btn sm" data-act="exToTopic" data-id="${e.id}">以后都这样 → 改约定</button></div>` : ''}
+      ${e.status === 'approved' && e.host === ME ? `<div class="btnrow">
+        <button class="btn sm" data-act="exToTopic" data-id="${e.id}">这种情况会经常有 → 改约定</button></div>` : ''}
+    </div>`;
+  };
+  return `${sec('临时例外', '不改长期约定，只针对这一次',
+      can('visits') ? `<button class="btn sm" data-act="newException">${svg(I.plus)}申请一次例外</button>` : '')}
+    <div class="notice" style="margin-bottom:12px">${svg(I.info)}<span>
+      约定是「${o.rule.title}」。偶尔有特殊情况，不用每次都改约定——可以只为这一次申请例外：
+      <b>所有在住室友分别同意</b>才生效，生效后那几晚正式登记且不再算超限，<b>到期自动失效</b>。</span></div>
+    ${live.length ? `<div class="stack" style="margin-bottom:12px">${live.map(card).join('')}</div>`
+      : `<div class="card empty" style="margin-bottom:12px">当前没有进行中的例外申请。</div>`}
+    ${past.length ? `<details class="exold"><summary>看看之前的 ${past.length} 条例外记录</summary>
+      <div class="stack" style="margin-top:10px">${past.map(card).join('')}</div></details>` : ''}`;
+}
+
 /* ---------- 离家 ---------- */
 function vAway() {
   const myAway = awayOf(ME);
@@ -604,7 +687,7 @@ function vAway() {
       return `<div class="row"><div class="main">
         <div class="ttl">${m.name}${m.id === ME ? '（你）' : ''}
           <span class="pill ${a ? 'plain' : 'ok'}">${a ? '登记离家中' : '在住'}</span></div>
-        <div class="meta">${a ? `${a.from} — ${a.to}，共 ${a.days} 天` : m.room}</div>
+        <div class="meta">${a ? `${fmtDn(a.fromDn)} — ${fmtDn(a.toDn)}，共 ${awayDays(a)} 天` : m.room}</div>
         ${a ? srcTag(a.src) : ''}</div>
         <div class="right">${av(m.id, 'lg' + (a ? ' out' : ''))}</div>
         ${a && m.id === ME ? `<div class="cta">
@@ -615,10 +698,10 @@ function vAway() {
     ${awayMembers().length ? `${sec('这份登记影响了什么')}
     <div class="card pad"><div class="stack">
       ${awayMembers().map(a => `<div>
-        <div style="font-family:var(--f-d);font-weight:600;font-size:14.5px;margin-bottom:6px">${mem(a.who).name} · ${a.from} — ${a.to}</div>
+        <div style="font-family:var(--f-d);font-weight:600;font-size:14.5px;margin-bottom:6px">${mem(a.who).name} · ${fmtDn(a.fromDn)} — ${fmtDn(a.toDn)}</div>
         <div class="calcline"><span class="cl">${svg(I.chore)}值日</span><span class="cv" style="font-weight:400;font-size:12.5px;color:var(--ink-2)">期间的任务自动暂缓，后续轮换补偿</span></div>
         <div class="calcline"><span class="cl">${svg(I.box)}公共采购</span><span class="cv" style="font-weight:400;font-size:12.5px;color:var(--ink-2)">期间不安排采购任务</span></div>
-        <div class="calcline"><span class="cl">${svg(I.scale)}水电分摊</span><span class="cv" style="font-weight:400;font-size:12.5px;color:var(--ink-2)">登记在住天数 ${30 - a.days} 天</span></div>
+        <div class="calcline"><span class="cl">${svg(I.scale)}水电分摊</span><span class="cv" style="font-weight:400;font-size:12.5px;color:var(--ink-2)">登记在住天数 ${Math.max(0, S.utilityForecast.days - awayDaysOf(a.who))} 天</span></div>
       </div>`).join('')}
     </div></div>` : ''}
     <div class="btnrow" style="margin-top:14px">
@@ -694,14 +777,18 @@ function vBill() {
   const limited = !can('bills');
   const net = netSettlement(), away = awayMembers(), fd = fairByDays();
   const open = openBills(), month = TODAY.split('月')[0] + '月';
-  const pending = !limited && away.length && !S.fairApplied;
+  const plan = S.splitPlan;
+  const planReq = plan && S.requests.find(r => r.id === plan.reqId);
+  /* 有人登记离家、又还没有人提过分摊方案时，才提示"要不要按天数分" */
+  /* 没有在等确认的方案时，才重新提示"要不要按天数分" */
+  const pending = !limited && away.length && (!plan || plan.status === 'rejected');
   const bills = limited ? S.bills.filter(b => b.payer === ME || b.people.includes(ME)) : S.bills;
 
   /* 每个人的应付 / 应收：应付 = 别人垫付里我的份额，应收 = 我垫付里别人的份额；已搬出待结清的人也在里面 */
   const gross = {};
   accountHolders().forEach(m => gross[m.id] = { pay:0, recv:0 });
-  open.forEach(b => b.people.forEach(p => {
-    if (p === b.payer || !gross[p]) return;
+  S.bills.forEach(b => payers(b).forEach(p => {
+    if (payState(b, p) === 'confirmed' || !gross[p]) return;
     gross[p].pay += shareOf(b, p);
     if (gross[b.payer]) gross[b.payer].recv += shareOf(b, p);
   }));
@@ -711,19 +798,42 @@ function vBill() {
       <span class="fhi"><img src="img/bill-idea.png" alt="" onload="this.parentNode.classList.add('ok')" onerror="this.remove()">${svg(I.spark)}</span>
       <div class="fhb">
         <h2>${S.utilityForecast.title}，要不要按登记在住天数来分？</h2>
-        <p>${away.map(a => `${mem(a.who).name} 登记了 ${a.from} — ${a.to} 离家，共 ${a.days} 天`).join('；')}。
+        <p>${away.map(a => `${mem(a.who).name} 登记了 ${fmtDn(a.fromDn)} — ${fmtDn(a.toDn)} 离家，共 ${awayDays(a)} 天`).join('；')}。
           ${S.utilityForecast.title}预计 ${yuan(S.utilityForecast.amount)}，如果仍按 ${living().length} 人平均，可能和大家的实际使用有出入。</p>
         <div class="btnrow">
-          <button class="btn pri" data-act="applyFair">采用这个方案</button>
-          <button class="btn" data-act="keepEven">仍按平均分摊</button>
+          <button class="btn pri" data-act="proposeSplit" data-m="days">提出：按在住天数分</button>
+          <button class="btn" data-act="proposeSplit" data-m="even">提出：仍按平均分摊</button>
         </div>
-        <div class="fhf">这只是一个建议，分摊方式由你们自己决定，系统不会替你们改。${srcTag({ via:'derived', note:'按成员登记的离家时间计算，系统不掌握真实居住情况' })}</div>
+        <div class="fhf">你只能"提出"方案：要参与的成员都确认，才会生成这笔账单。系统不会替你们决定怎么分。${srcTag({ via:'derived', note:'按成员登记的离家时间计算，系统不掌握真实居住情况' })}</div>
+      </div>
+    </div>` : `
+    ${plan && plan.status === 'pending' && planReq ? `
+    <div class="fairhero pendingplan">
+      <span class="fhi">${svg(I.scale)}</span>
+      <div class="fhb">
+        <h2>${mem(plan.by).name} 提出了一个分摊方案，等大家确认</h2>
+        <p>${plan.method === 'days' ? '按登记在住天数分' : '维持平均分摊'}：${fairByDays(plan.people).rows.map(r =>
+          `${mem(r.id).name} ${yuan(plan.method === 'days' ? r.amount : S.utilityForecast.amount / plan.people.length)}`).join(' · ')}。
+          <b>确认齐之前不会生成账单。</b></p>
+        <div class="tk-stances">${reqNeed(planReq).map(idp => { const rp = reqResp(planReq, idp);
+          return `<span class="tk-st ${!rp ? 'none' : rp.stance === 'agree' ? 'agree' : rp.stance === 'decline' ? 'disagree' : 'undecided'}">${av(idp, 'sm')}${mem(idp).name} · ${rp ? RESP_TEXT[rp.stance] : '等待确认'}</span>`; }).join('')}</div>
+        <div class="btnrow">
+          ${reqNeed(planReq).includes(ME) && !reqResp(planReq, ME)
+            ? `<button class="btn pri" data-act="reqAgree" data-id="${planReq.id}">确认这个方案</button>
+               <button class="btn" data-act="reqDecline" data-id="${planReq.id}">我有不同意见</button>
+               <button class="btn" data-act="reqDiscuss" data-id="${planReq.id}">想讨论一下</button>`
+            : plan.by === ME ? `<button class="btn" data-act="cancelSplit">撤回这个方案</button>` : ''}
+        </div>
+        <div class="fhf">${reqProgress(planReq)}${reqWaiting(planReq).length ? ` · 还在等 ${reqWaiting(planReq).map(x => mem(x).name).join('、')}` : ''}</div>
       </div>
     </div>` : `
     <div class="fairdone">${svg(I.check)}<span>${limited ? '你已搬出，这里只显示和你有关的账单；结清之后成员关系正式结束。'
-      : S.fairApplied
-      ? `${S.utilityForecast.title}${S.bills.some(b => b.method === 'days') ? '已按登记在住天数计算，并加入下方账单' : '按平均分摊，大家已确认'}。房租、宽带这类固定成本和公共消耗品不受离家天数影响，维持原有方式。`
-      : '这个月没有人登记离家，公共费用按平均分摊。离家天数只会影响水电燃气这类随使用变化的费用。'}</span></div>`;
+      : plan && plan.status === 'rejected'
+      ? `上一个分摊方案没有通过（${plan.reason || '有人不同意'}），${S.utilityForecast.title}暂时还按原来的方式算。可以改一版再提，或者就维持平均分摊。`
+      : plan && plan.status === 'applied'
+      ? `${S.utilityForecast.title}的分摊方案经${(plan.confirmedBy || []).map(x => mem(x).name).join('、') || '相关成员'}确认后已生成账单（${plan.method === 'days' ? '按登记在住天数' : '平均分摊'}）。房租、宽带这类固定成本和公共消耗品不受离家天数影响，维持原有方式。`
+      : away.length ? '有人登记了离家。水电这类随使用变化的费用可以按在住天数分，但要相关成员确认。'
+      : '这个月没有人登记离家，公共费用按平均分摊。离家天数只会影响水电燃气这类随使用变化的费用。'}</span></div>`}`;
 
   const fairPeople = pending ? `
     <div class="fairpeople">
@@ -736,23 +846,46 @@ function vBill() {
 
   /* ---- 每一笔记录 ---- */
   const scope = b => b.people.length < living().length ? `${b.people.length} 人分` : METHOD_TEXT[b.method];
-  const billRow = b => `
-    <div class="brow ${b.settled ? 'done' : ''}">
+  /* 每一笔都把"每一份"摊开：谁该付多少、到哪一步了。
+     整笔结清是所有份额都确认之后的结果，不是某个人点一下的结果。 */
+  const PAY_PILL = { owed:'warn', claimed:'peach', confirmed:'ok' };
+  const shareRow = (b, p) => {
+    const stt = payState(b, p), amt = yuan(shareOf(b, p));
+    const canClaim = p === ME && stt === 'owed';
+    const canConfirm = b.payer === ME && stt === 'claimed';
+    const canUndo = stt === 'confirmed' && (b.payer === ME || p === ME);
+    return `<span class="bshare ${stt}">${av(p, 'sm')}<b>${mem(p).name}${p === ME ? '（你）' : ''}</b><em>${amt}</em>
+      <span class="pill ${PAY_PILL[stt]}">${PAY_TEXT[stt]}</span>
+      ${canClaim ? `<button class="btn sm pri" data-act="payClaim" data-id="${b.id}">我已付这一份</button>` : ''}
+      ${canConfirm ? `<button class="btn sm pri" data-act="payConfirm" data-id="${b.id}" data-w="${p}">${svg(I.check)}确认收到</button>` : ''}
+      ${canUndo ? `<button class="btn sm" data-act="payUndo" data-id="${b.id}" data-w="${p}">撤销</button>` : ''}</span>`;
+  };
+  const billRow = b => {
+    const done = isSettled(b), left = payers(b).filter(p => payState(b, p) !== 'confirmed');
+    const sum = Object.values(sharesCentsOf(b)).reduce((a, c) => a + c, 0);
+    return `
+    <div class="brow ${done ? 'done' : ''}">
       <div class="bdate">${b.date}</div>
       <div class="bwhat"><b>${b.title}</b>${b.note ? `<span>${b.note}</span>` : ''}</div>
       <div class="bchips"><span class="bchip kind">${BILL_KIND[billKindOf(b)]}</span><span class="bchip ${b.method === 'days' ? 'sage' : b.people.length < living().length ? 'sky' : ''}">${scope(b)}</span>
         ${b.src && b.src.via !== 'manual' ? `<span class="bchip src">${b.src.via === 'supply' ? '补货自动生成' : '管家记录'}</span>` : ''}</div>
       <div class="bpayer">${av(b.payer, 'sm')}<span>${mem(b.payer).name}${b.payer === ME ? '（你）' : ''} 垫付</span></div>
-      <div class="bpeople">${b.people.map(p => av(p, 'sm')).join('')}<span>${b.shares ? `${b.people.length} 人 · 各不相同` : perLabel(b)}</span></div>
+      <div class="bpeople">${b.people.map(p => av(p, 'sm')).join('')}<span>${b.weights ? `${b.people.length} 人 · 各不相同` : perLabel(b)}</span></div>
       <div class="bamt">${yuan(b.amount)}</div>
-      <div class="bstate"><span class="pill ${b.settled ? 'ok' : 'warn'}">${b.settled ? '已结清' : '待结算'}</span></div>
+      <div class="bstate"><span class="pill ${done ? 'ok' : left.length === payers(b).length ? 'warn' : 'peach'}">${
+        done ? '已结清' : `${payers(b).length - left.length}/${payers(b).length} 份已结清`}</span></div>
       <div class="bact">
         ${limited ? '' : `<button class="btn sm" data-act="editBill" data-id="${b.id}">修改</button>`}
-        ${b.settled
-          ? `<button class="btn sm" data-act="unsettle" data-id="${b.id}">撤销结清</button>`
-          : `<button class="btn sm pri" data-act="settle" data-id="${b.id}">${svg(I.check)}标记结清</button>`}
+        ${b.payer === ME && left.some(p => payState(b, p) === 'claimed')
+          ? `<button class="btn sm pri" data-act="payConfirmAll" data-id="${b.id}">${svg(I.check)}确认全部收到</button>` : ''}
+      </div>
+      <div class="bshares">
+        ${payers(b).length ? payers(b).map(p => shareRow(b, p)).join('')
+          : '<span class="bshare confirmed">这笔只有垫付人自己参与，不需要别人分摊</span>'}
+        <span class="bsum">${svg(I.info)}各人合计 ${yuan(sum / 100)}，与总额一致${done ? ` · ${settledDate(b)} 全部结清` : ''}</span>
       </div>
     </div>`;
+  };
 
   const netLabel = id => {
     const v = net.balances[id] || 0;
@@ -780,8 +913,9 @@ function vBill() {
       <div class="bsl">本月共同支出</div><div class="bsv">${yuan(monthTotal())}</div>
       <div class="bss">${S.bills.length} 笔支出</div></div></div>
     <div class="bst sage"><span class="bsi">${svg(I.check)}</span><div>
-      <div class="bsl">未结清</div><div class="bsv">${open.length} <small>笔</small></div>
-      <div class="bss">月末按净额一次结清</div></div></div>
+      <div class="bsl">${limited ? '未结清' : '等我确认收款'}</div>
+      <div class="bsv">${limited ? open.length : myToConfirm().length} <small>笔</small></div>
+      <div class="bss">${limited ? '月末按净额一次结清' : myToConfirm().length ? '有人说已经付了，等你确认' : `未结清共 ${open.length} 笔，月末按净额结`}</div></div></div>
     <div class="bquote">
       <p>AA 不只是付钱，<br>更是互相理解的生活方式。</p>
       ${imgSlot('img/bill-tip.jpg', '待补小贴士插画')}
@@ -993,9 +1127,19 @@ function vTalk() {
         <ul class="tk-rules">${S.rules.map(ruleRow).join('')}</ul>
       </section>
 
+      ${trialTopics().length ? `<section class="tsec">
+        <div class="tk-h"><span class="tk-hi peach">${svg(I.clock)}</span>
+          <div><h2>限时试行中</h2><p>先按新方案做一段时间再定。到期自动回到讨论，不会悄悄变成长期约定。</p></div></div>
+        <ul class="tk-rules">${trialTopics().map(t => `<li class="tk-rule">
+          <span class="tk-ri">${svg(I.clock)}</span>
+          <div class="tk-rt"><b>${t.title}</b><span>${t.proposal}</span>
+            <em>试行到 ${fmtDn(t.trialUntilDn)}，还有 ${Math.max(0, t.trialUntilDn - dnNow())} 天</em></div>
+          <button class="btn sm" data-act="openTopic" data-id="${t.id}">查看</button></li>`).join('')}</ul>
+      </section>` : ''}
+
       ${held.length ? `<section class="tsec">
         <div class="tk-h"><span class="tk-hi plain">${svg(I.clock)}</span>
-          <div><h2>暂不调整</h2><p>讨论过但没达成一致，原有约定保持不变，想起来还能再提。</p></div></div>
+          <div><h2>这次没有调整</h2><p>讨论过但没谈拢——这是一个明确的结果，不是"假装说好了"。原有约定一个字没改，继续生效；谁都可以重新提出来。</p></div></div>
         <ul class="tk-rules held">${held.map(t => `<li class="tk-rule">
           <span class="tk-ri">${svg(I.talk)}</span>
           <div class="tk-rt"><b>${t.title}</b><span>${t.heldAt} 记录 · 原有约定未改动</span></div>
@@ -1088,8 +1232,46 @@ function vTopic() {
     ${sec('讨论记录')}
     <div class="card rows">${[...t.history].reverse().map(h => `<div class="row"><div class="main"><div class="ttl">${hist(h)}</div>${h.at ? `<div class="meta">${h.at}</div>` : ''}</div></div>`).join('')}</div>
 
-    ${talking ? `<div class="btnrow" style="margin-top:14px"><button class="btn sm" data-act="holdTopic" data-id="${t.id}">这次先不调整，保持原有约定</button></div>`
-      : t.status === 'hold' ? `<div class="btnrow" style="margin-top:14px"><button class="btn sm" data-act="reopenTopic" data-id="${t.id}">重新提出</button></div>` : ''}`;
+    ${talking ? deadlockBox(t) : ''}
+    ${t.status === 'trial' ? `<div class="card pad" style="margin-top:14px;border-color:var(--peach)">
+      <b style="font-family:var(--f-d);font-size:15px">${svg(I.clock)}限时试行中</b>
+      <p style="font-size:13.5px;color:var(--ink-2);margin-top:5px;line-height:1.6">
+        先按这一版做到 ${fmtDn(t.trialUntilDn)}（还有 ${Math.max(0, t.trialUntilDn - dnNow())} 天）。到期自动回到讨论，不会悄悄变成永久约定。
+        试行期间原约定上标了「试行」，到期会恢复成试行前那一版。</p>
+      <div class="btnrow" style="margin-top:10px">
+        <button class="btn sm pri" data-act="endTrial" data-id="${t.id}" data-k="adopt">提前定下来，正式写进约定</button>
+        <button class="btn sm" data-act="endTrial" data-id="${t.id}" data-k="stop">提前结束试行，回到原约定</button></div></div>` : ''}
+    ${t.status === 'hold' ? `<div class="card pad" style="margin-top:14px">
+      <b style="font-family:var(--f-d);font-size:15px">这次没有达成一致</b>
+      <p style="font-size:13.5px;color:var(--ink-2);margin-top:5px;line-height:1.6">
+        这是一个明确的阶段性结果，不是"假装说好了"：原有约定一个字都没改，继续生效。
+        谁都可以在想清楚之后重新提出来。</p>
+      <div class="btnrow" style="margin-top:10px"><button class="btn sm pri" data-act="reopenTopic" data-id="${t.id}">重新提出</button></div></div>` : ''}`;
+}
+
+/* 讨论卡住时的三条出路：改一版折中方案 / 先试行一段时间 / 这次就不调整。
+   三者都是明确的结果，不会让议题永远挂着，也不会把"没谈拢"包装成"已达成"。 */
+function deadlockBox(t) {
+  const need = topicNeeds(t);
+  const no = need.filter(id => { const p = positionOf(t, id); return p && p.stance === 'disagree'; });
+  const wait = need.filter(id => { const s2 = stanceOf(t, id); return s2.k === 'none' || s2.k === 'stale'; });
+  const stuck = no.length > 0;
+  const rule = S.rules.find(r => r.id === (t.ruleId || t.revisit));
+  return `<div class="card pad dlock ${stuck ? 'stuck' : ''}" style="margin-top:14px">
+    <div class="dl-h">${svg(stuck ? I.info : I.talk)}<div>
+      <b>${stuck ? `有 ${no.length} 个人不同意这一版` : wait.length ? `还在等 ${wait.length} 个人表态` : '大家都看过了'}</b>
+      <span>${stuck
+        ? `${no.map(x => mem(x).name).join('、')} 对当前方案有不同意见。一直谈不拢也没关系——下面三条路都是明确的结果。${rule ? `在此之前「${rule.title}」原样生效。` : ''}`
+        : '不着急，表态随时可以改。如果一直卡着，下面三条路都可以走。'}</span></div></div>
+    <div class="dl-opts">
+      <button class="dl-opt" data-act="proposalEdit" data-id="${t.id}">
+        <b>${svg(I.edit)}改一版折中方案</b><span>把双方都在意的点各让一步，写成新的一版。改完之后所有人重新确认。</span></button>
+      <button class="dl-opt" data-act="trialTopic" data-id="${t.id}">
+        <b>${svg(I.clock)}先试行两周</b><span>不急着定成长期约定：先按这一版做到 ${fmtDn(dnNow() + 14)}，到期自动回到讨论。</span></button>
+      <button class="dl-opt" data-act="holdTopic" data-id="${t.id}">
+        <b>${svg(I.check)}这次就不调整</b><span>明确记下"暂时没谈拢"，原有约定保持不变，想起来还能再提。</span></button>
+    </div>
+  </div>`;
 }
 
 function vOnboard() {
@@ -1245,6 +1427,7 @@ const PREF_TILE_ICON = { quiet:I.clock, visitor:I.guest, overnight:I.guest, kitc
 const MOVE_STEP_ICON = { m1:I.bill, m2:I.box, m3:I.scale, m4:I.broom, m5:I.key, m6:I.chore };
 
 function vMe() {
+  if (S.sub === 'msg') return vMsg();
   if (!can('moveout')) return vMeLimited();
   if (S.sub === 'moveout') return vMoveout();
   const me = mem(ME), st = statusOf(ME), a = awayOf(ME);
@@ -1262,7 +1445,7 @@ function vMe() {
     return `<div class="mp-tile"><span class="mp-ti">${svg(PREF_TILE_ICON[k] || I.check)}</span><div><span>${p.label}</span><b>${me.prefs[k] || '还没填'}</b></div></div>`; };
 
   const thingRow = s => `<li class="thing">
-    <figure class="ph thumb"><img src="${s.photo || ''}" alt="" onload="this.parentNode.classList.add('ok')" onerror="this.remove()"><figcaption>${svg(I.box)}</figcaption></figure>
+    <figure class="ph thumb">${s.photo ? `<img src="${s.photo}" alt="" onload="this.parentNode.classList.add('ok')" onerror="this.remove()">` : ''}<figcaption>${svg(I.box)}</figcaption></figure>
     <div class="th-t"><b>${s.name}<span class="pill ${s.kind === 'lend' ? 'info' : 'plain'}">${s.kind === 'lend' ? '可借' : '私人'}</span></b>
       <span>${s.kind === 'lend' ? s.rule : (s.zone || '未标注位置')}</span>
       <em>${me.name} · ${s.src && s.src.at ? s.src.at + ' ' : ''}添加${s.src && s.src.edited ? ` · ${s.src.edited} 改过` : ''}</em></div>
@@ -1274,7 +1457,7 @@ function vMe() {
   return `
   <div class="mehead">
     <div class="phead"><h1>我的</h1><p>你在这个家里的状态、边界与责任。</p></div>
-    ${imgSlot('img/mine-header-decor.png', '待补页面右上装饰图<br>绿植 · 手写字')}
+    <figure class="ph"><figcaption>待补页面右上装饰图<br>绿植 · 手写字</figcaption></figure>
   </div>
 
   <section class="card meid">
@@ -1286,7 +1469,7 @@ function vMe() {
     </div>
     <div class="meid-act">
       <button class="btn pri" data-act="${a ? 'cancelAwayMe' : 'newAway'}">${svg(I.away)}${a ? '我提前回来了' : '登记离家计划'}</button>
-      <small>${a ? `${a.from} — ${a.to} 登记离家中` : '临时外出 / 请假不在家'}</small>
+      <small>${a ? `${fmtDn(a.fromDn)} — ${fmtDn(a.toDn)} 登记离家中` : '临时外出 / 请假不在家'}</small>
     </div>
   </section>
 
@@ -1330,7 +1513,7 @@ function vMe() {
         <ul class="melist tasks">${tasks.map(t => `<li class="${t.done ? 'dim' : ''}">
           <span class="ml-i">${svg(t.done ? I.check : I.chore)}</span>
           <div><b>${t.task}</b>${t.done && t.doneAt ? `<span>${t.doneAt} 标记完成</span>` : taskPaused(t) ? '<span>登记离家中，已暂缓，回来后再做</span>' : t.deferred ? `<span>${t.deferred}</span>` : ''}</div>
-          <span class="pill ${t.done ? 'ok' : 'warn'}">${t.done ? '已完成' : t.due}</span>
+          <span class="pill ${t.done ? 'ok' : 'warn'}">${t.done ? '已完成' : taskDue(t)}</span>
           ${t.done ? '' : `<button class="btn pri sm" data-act="doneTask" data-id="${t.id}">${svg(I.check)}完成</button>`}</li>`).join('')
           || '<li><div><b>这周没有分配给你的任务</b></div></li>'}</ul>
       </section>
@@ -1338,6 +1521,17 @@ function vMe() {
   </div>
 
   <div class="megrid">
+    <section class="card mesec">
+      <div class="ms-h"><span class="ms-i">${svg(I.talk)}</span><b>我的消息</b>
+        <span class="ms-sub">${unreadMessages().length ? `${unreadMessages().length} 条未读` : '没有未读'}</span>
+        <button class="lcgo" data-act="go" data-tab="me" data-sub="msg">查看${svg(I.chev)}</button></div>
+      <ul class="melist">${myMessages().slice(0, 3).map(m => `<li>
+        <span class="ml-i">${svg(MSG_ICON[m.kind] || I.spark)}</span>
+        <div><b>${m.title}</b><span>${MSG_KIND[m.kind]} · ${m.at}</span></div>
+        ${m.read[ME] ? '' : '<span class="pill warn">未读</span>'}</li>`).join('')
+        || '<li><div><b>还没有收到消息</b><span>私下沟通、中立提醒、管家回执都会出现在这里</span></div></li>'}</ul>
+    </section>
+
     <section class="card mesec">
       <div class="ms-h"><span class="ms-i">${svg(I.bill)}</span><b>我的账单</b></div>
       <div class="mebill">
@@ -1366,6 +1560,39 @@ function vMe() {
     </div>
     <button class="btn pri" data-act="go" data-tab="me" data-sub="moveout">${svg(I.arrow)}开始搬出准备</button>
   </section>`;
+}
+
+/* ---------- 站内消息（演示）----------
+   产品承诺"已发送 / 已提醒"的地方，都会在这里留下一条真实可查的记录。
+   演示环境没有真实推送，所以每条都标明是模拟的；切换身份就能看到对方收到了什么。 */
+const MSG_ICON = { private:I.talk, remind:I.info, steward:I.phone, notify:I.spark, house:I.home };
+function vMsg() {
+  const list = myMessages();
+  const unread = unreadMessages().length;
+  return `
+    ${backBtn('我的', 'me')}
+    ${head('我的消息', '这里是产品真的"发出去"的那些东西：私下沟通、中立提醒、管家回执、系统通知。')}
+    <div class="notice" style="margin-bottom:12px">${svg(I.alert)}<span>
+      演示环境不接真实推送：这些都是<b>模拟站内消息</b>。切换体验身份，就能看到对方收到的是什么。</span></div>
+    ${unread ? `<div class="btnrow" style="margin-bottom:12px"><button class="btn sm" data-act="readAllMsg">全部标为已读（${unread}）</button></div>` : ''}
+    ${list.length ? `<div class="stack">${list.map(m => `
+      <div class="card pad msg ${m.read[ME] ? 'dim' : 'unread'}">
+        <div class="msg-h">
+          <span class="msg-i">${svg(MSG_ICON[m.kind] || I.spark)}</span>
+          <div class="msg-t"><b>${m.title}</b>
+            <span>${MSG_KIND[m.kind]} · ${m.anonymous ? '不显示发起人' : m.from === 'sys' ? 'Roomly 管家' : mem(m.from).name} · ${m.at}</span></div>
+          ${m.read[ME] ? '<span class="pill plain">已读</span>' : '<span class="pill warn">未读</span>'}
+        </div>
+        ${m.body ? `<p class="msg-b">${m.body}</p>` : ''}
+        <div class="btnrow" style="margin-top:9px">
+          ${m.read[ME] ? '' : `<button class="btn sm pri" data-act="readMsg" data-id="${m.id}">知道了</button>`}
+          ${m.meta && m.meta.req ? `<button class="btn sm" data-act="go" data-tab="life" data-sub="guest">去回应</button>` : ''}
+          ${m.meta && m.meta.bill ? `<button class="btn sm" data-act="go" data-tab="bill">去账单</button>` : ''}
+          ${m.meta && m.meta.topic ? `<button class="btn sm" data-act="openTopic" data-id="${m.meta.topic}">去讨论</button>` : ''}
+          <button class="btn sm ghost" data-act="delMsg" data-id="${m.id}">删除</button>
+        </div>
+      </div>`).join('')}</div>`
+      : '<div class="card empty">还没有收到消息。别人私下发给你的话、系统的中立提醒、管家的回执都会出现在这里。</div>'}`;
 }
 
 function vMoveout() {
@@ -1438,7 +1665,7 @@ function vHomeLimited() {
     </section>
     ${pendingBlocks(me)}
     ${lockedCard('入住之后才会向你开放的', '入住日之前的账单、值日任务、家里动态、其他成员的私人物品和过去的居住问题记录，都与你无关，也不会显示给你。从入住日起，新的公共费用和值日会默认把你算进去。', goBtn('我们已经说好的约定', 'talk') + goBtn('我的生活偏好', 'me'))}`;
-  const open = openBills().filter(b => b.payer === ME || b.people.includes(ME));
+  const open = memberOpenBills(ME);
   return `
     <section class="welcome">
       <div class="wl-text"><h1>${me.name}，${ms === 'ended' ? '你的成员关系已经结束' : '你已经搬出这个家'}</h1>
@@ -1479,7 +1706,7 @@ function vTalkLimited() {
 
 function vMeLimited() {
   const me = mem(ME), ms = membership(ME), org = HOUSE.org.split(' · ')[0];
-  const open = openBills().filter(b => b.payer === ME || b.people.includes(ME));
+  const open = memberOpenBills(ME);
   const rec = S.moveoutRecord && S.moveoutRecord.who === ME ? S.moveoutRecord : null;
   const identity = `
     <section class="card meid">
@@ -1497,11 +1724,11 @@ function vMeLimited() {
       <div class="mp-src">${svg(I.info)}${S.onboardDone[ME]} 由你本人在入住共识里填写</div>
     </section>`;
   if (ms === 'pending') return `
-    <div class="mehead"><div class="phead"><h1>我的</h1><p>入住前，先看看为你准备好的东西。</p></div>${imgSlot('img/mine-header-decor.png', '待补页面右上装饰图<br>绿植 · 手写字')}</div>
+    <div class="mehead"><div class="phead"><h1>我的</h1><p>入住前，先看看为你准备好的东西。</p></div><figure class="ph"><figcaption>待补页面右上装饰图<br>绿植 · 手写字</figcaption></figure></div>
     ${identity}${prefs}${pendingBlocks(me)}
     ${lockedCard('入住之后才会出现的', '我的物品、我的责任、我的账单、与我相关的房屋服务，以及搬出与退租，都从入住日开始。')}`;
   return `
-    <div class="mehead"><div class="phead"><h1>我的</h1><p>${ms === 'ended' ? '成员关系已经结束，这里只留下属于你的东西。' : '搬出之后，把账结清就好。'}</p></div>${imgSlot('img/mine-header-decor.png', '待补页面右上装饰图<br>绿植 · 手写字')}</div>
+    <div class="mehead"><div class="phead"><h1>我的</h1><p>${ms === 'ended' ? '成员关系已经结束，这里只留下属于你的东西。' : '搬出之后，把账结清就好。'}</p></div><figure class="ph"><figcaption>待补页面右上装饰图<br>绿植 · 手写字</figcaption></figure></div>
     ${identity}
     <section class="card mesec" style="margin-bottom:16px">
       <div class="ms-h"><span class="ms-i">${svg(I.truck)}</span><b>搬出记录与退租状态</b><span class="pill ${ms === 'ended' ? 'ok' : 'warn'}">${ms === 'ended' ? '成员关系已结束' : '待结清'}</span></div>
@@ -1511,7 +1738,12 @@ function vMeLimited() {
         <li><span class="ml-i">${svg(ms === 'ended' ? I.check : I.clock)}</span><div><b>历史账务结清</b><span>${ms === 'ended' ? '已全部结清，成员关系于此结束' : `还有 ${open.length} 笔和你有关的账单未结清`}</span></div>
           ${ms === 'ended' ? '' : goBtn('去处理', 'bill', null, true)}</li>
       </ul>
-      ${ms === 'ended' ? '' : `<ul class="melist" style="margin-top:8px">${open.map(b => `<li><span class="ml-i">${svg(I.bill)}</span><div><b>${b.title}</b><span>${b.payer === ME ? `你垫付，应收 ${yuan(b.amount - shareOf(b, ME))}` : `${mem(b.payer).name} 垫付，你的份额 ${yuan(shareOf(b, ME))}`}</span></div><button class="btn sm pri" data-act="settle" data-id="${b.id}">${svg(I.check)}标记结清</button></li>`).join('')}</ul>`}
+      ${ms === 'ended' ? '' : `<ul class="melist" style="margin-top:8px">${open.map(b => `<li><span class="ml-i">${svg(I.bill)}</span><div><b>${b.title}</b><span>${b.payer === ME ? `你垫付，应收 ${yuan(b.amount - shareOf(b, ME))}` : `${mem(b.payer).name} 垫付，你的份额 ${yuan(shareOf(b, ME))}`}</span></div>${b.payer === ME
+          ? (payers(b).filter(p => payState(b, p) !== 'confirmed').length
+              ? `<button class="btn sm pri" data-act="payConfirmAll" data-id="${b.id}">${svg(I.check)}确认收到</button>` : '')
+          : (payState(b, ME) === 'owed'
+              ? `<button class="btn sm pri" data-act="payClaim" data-id="${b.id}">我已付这一份</button>`
+              : `<span class="pill peach">${PAY_TEXT[payState(b, ME)]}</span>`)}</li>`).join('')}</ul>`}
       <div class="btnrow" style="margin-top:12px"><button class="btn sm" data-act="undoMoveout">（演示）恢复为在住成员</button></div>
     </section>
     ${prefs}`;
